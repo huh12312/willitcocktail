@@ -8,3 +8,5 @@ coverage
 *.tsbuildinfo
 .claude/
 data-pipeline/.tmp-*.mjs
+playwright-report/
+test-results/

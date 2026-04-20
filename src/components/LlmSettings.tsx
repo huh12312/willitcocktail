@@ -34,7 +34,7 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-lg border border-amber-700/40 bg-stone-950 p-5"
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-amber-700/40 bg-stone-950 p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
