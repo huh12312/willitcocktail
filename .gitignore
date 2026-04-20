@@ -7,3 +7,4 @@ dist-ssr
 coverage
 *.tsbuildinfo
 .claude/
+data-pipeline/.tmp-*.mjs
