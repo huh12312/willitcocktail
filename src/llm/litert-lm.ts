@@ -1,31 +1,75 @@
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import type { DataIndex } from '../data';
+import { matchRecipes } from '../matcher';
+import { RECIPE_TAGS, type FlavorTag } from '../data/flavor-tags';
+import type { Recipe } from '../types';
 import type {
+  IntentMatch,
   IntentSearchResult,
   LlmProvider,
   ParsedPantry,
+  RecipePolish,
 } from './provider';
+import { check_pantry, search_recipes, type SearchRecipesArgs } from './tools';
 
-// Shape the native Capacitor plugin is expected to implement.
-// See src/llm/README.md for the Kotlin / LiteRT-LM implementation plan.
-export interface LiteRtLmPlugin {
-  modelStatus(): Promise<{ downloaded: boolean; sizeMb?: number; path?: string }>;
-  downloadModel(opts: { url: string }): Promise<{ path: string }>;
-  addDownloadListener(
-    cb: (e: { bytesDownloaded: number; totalBytes: number }) => void,
-  ): Promise<{ remove: () => Promise<void> }>;
-  runInference(opts: {
-    system: string;
-    messages: { role: 'user' | 'assistant' | 'tool'; content: string; toolCallId?: string }[];
-    tools?: unknown[];
-    maxTokens?: number;
-    temperature?: number;
-    jsonSchema?: unknown;
-  }): Promise<{
-    content: string;
-    toolCalls?: { id: string; name: string; arguments: string }[];
-    stopReason: 'stop' | 'length' | 'tool_call';
-  }>;
+// --- Native plugin surface --------------------------------------------------
+// Implemented in Kotlin under android/app/src/main/java/.../LiteRtLmPlugin.kt.
+// Deliberately kept narrow: single-shot `generate`, with multi-step workflows
+// composed from TypeScript. Multi-turn tool loops are ugly on-device and the
+// sessions blow the 8k context of Gemma 2B fast — chaining generate() calls
+// with pre-filtered context is clearer and easier to debug.
+
+export interface ModelStatus {
+  downloaded: boolean;
+  ready: boolean; // downloaded AND engine initialised
+  path?: string;
+  sizeBytes?: number;
 }
+
+export interface DownloadProgressEvent {
+  bytesDownloaded: number;
+  totalBytes: number;
+}
+
+export interface GenerateOptions {
+  prompt: string;
+  maxTokens?: number;
+  temperature?: number;
+  topK?: number;
+  // Not all LiteRT / MediaPipe GenAI builds support schema-constrained
+  // decoding. When unsupported, the plugin ignores this and we fall back to
+  // tolerant JSON parsing on the TS side.
+  jsonSchema?: string;
+}
+
+export interface GenerateResult {
+  text: string;
+  tokenCount?: number;
+  stopReason: 'stop' | 'length' | 'error';
+  errorMessage?: string;
+}
+
+export interface LiteRtLmPlugin {
+  modelStatus(): Promise<ModelStatus>;
+  setModelConfig(opts: { url: string; expectedSha256?: string }): Promise<void>;
+  downloadModel(): Promise<{ path: string }>;
+  deleteModel(): Promise<void>;
+  generate(opts: GenerateOptions): Promise<GenerateResult>;
+  addListener(
+    eventName: 'downloadProgress',
+    listenerFunc: (event: DownloadProgressEvent) => void,
+  ): Promise<PluginListenerHandle>;
+}
+
+const pluginRef: LiteRtLmPlugin | null = Capacitor.isNativePlatform()
+  ? registerPlugin<LiteRtLmPlugin>('LiteRtLm')
+  : null;
+
+export function getLiteRtLmPlugin(): LiteRtLmPlugin | null {
+  return pluginRef;
+}
+
+// --- Provider ---------------------------------------------------------------
 
 export class LitertLmProvider implements LlmProvider {
   readonly id = 'litert-lm';
@@ -33,18 +77,403 @@ export class LitertLmProvider implements LlmProvider {
   readonly requiresModelDownload = true;
 
   async isAvailable(): Promise<boolean> {
-    return false;
+    const p = getLiteRtLmPlugin();
+    if (!p) return false;
+    try {
+      const s = await p.modelStatus();
+      return s.ready === true;
+    } catch {
+      return false;
+    }
   }
 
-  async parseIngredients(_input: string, _data: DataIndex): Promise<ParsedPantry> {
-    throw new Error('LitertLmProvider is not available on this platform yet.');
+  async parseIngredients(input: string, data: DataIndex): Promise<ParsedPantry> {
+    const p = requirePlugin();
+    const vocab = sampleVocabulary(data);
+    const prompt = buildParsePrompt(input, vocab);
+    const res = await p.generate({
+      prompt,
+      maxTokens: 512,
+      temperature: 0.1,
+      jsonSchema: PARSE_SCHEMA,
+    });
+    const parsed = safeJsonParse(res.text);
+    return mapParseOutput(parsed, data);
   }
 
   async searchIntent(
-    _query: string,
-    _pantryIds: string[],
-    _data: DataIndex,
+    query: string,
+    pantryIds: string[],
+    data: DataIndex,
   ): Promise<IntentSearchResult> {
-    throw new Error('LitertLmProvider is not available on this platform yet.');
+    const p = requirePlugin();
+    // Do the retrieval step in TS so the model only has to rank. Feeds a
+    // pre-filtered candidate list of 8–12 recipes matched against pantry +
+    // crude keyword tags — way faster than asking the 2B model to execute
+    // search_recipes from scratch, and bounds the context size.
+    const candidates = preselect(query, pantryIds, data);
+    const prompt = buildIntentPrompt(query, pantryIds, candidates, data);
+    const res = await p.generate({
+      prompt,
+      maxTokens: 768,
+      temperature: 0.3,
+      jsonSchema: INTENT_SCHEMA,
+    });
+    const parsed = safeJsonParse(res.text);
+    return mapIntentOutput(parsed, data, pantryIds, candidates);
+  }
+
+  async proposeRecipe(candidate: Recipe, data: DataIndex): Promise<RecipePolish> {
+    const p = requirePlugin();
+    const prompt = buildPolishPrompt(candidate, data);
+    const res = await p.generate({
+      prompt,
+      maxTokens: 512,
+      temperature: 0.7,
+      jsonSchema: POLISH_SCHEMA,
+    });
+    const parsed = safeJsonParse(res.text);
+    return {
+      name: sanitiseString(parsed?.name, candidate.name, 48),
+      garnish: sanitiseString(parsed?.garnish, candidate.garnish ?? '—', 80),
+      instructions: sanitiseString(parsed?.instructions, candidate.instructions, 400),
+      reasoning: sanitiseString(parsed?.reasoning, '', 300),
+    };
   }
 }
+
+function requirePlugin(): LiteRtLmPlugin {
+  const p = getLiteRtLmPlugin();
+  if (!p) {
+    throw new Error(
+      'LiteRT-LM plugin is not installed. Build the Android app (see src/llm/README.md).',
+    );
+  }
+  return p;
+}
+
+// --- Prompt builders --------------------------------------------------------
+
+function buildParsePrompt(input: string, vocab: string): string {
+  return [
+    'You parse freeform cocktail ingredient phrases into canonical IDs.',
+    '',
+    `Canonical IDs (sample): ${vocab}.`,
+    '',
+    'Rules:',
+    '- Pick the most generic applicable ID when the user is vague ("gin" → "gin", not a child brand).',
+    '- confidence: 1.0 certain · 0.7 probable · 0.4 guess.',
+    '- Put phrases you cannot map into "unresolved".',
+    '',
+    'Return ONLY a JSON object with this shape:',
+    '{ "resolved": [{ "input": string, "ingredient_id": string, "confidence": number }], "unresolved": [string] }',
+    '',
+    `User input: ${input}`,
+    '',
+    'JSON:',
+  ].join('\n');
+}
+
+function buildIntentPrompt(
+  query: string,
+  pantryIds: string[],
+  candidates: Recipe[],
+  data: DataIndex,
+): string {
+  const pantryNames = pantryIds
+    .map((id) => data.ingredientById.get(id)?.name ?? id)
+    .join(', ');
+  const candidateLines = candidates
+    .map((r) => {
+      const tags = RECIPE_TAGS[r.id] ?? [];
+      return `- ${r.id} (${r.name}) — family=${r.family}${tags.length ? `, tags=[${tags.join(',')}]` : ''}`;
+    })
+    .join('\n');
+  return [
+    'You rank cocktails for a user based on their pantry and mood.',
+    '',
+    `Pantry: ${pantryNames || '(empty)'}`,
+    `User query: ${query}`,
+    '',
+    'Candidate recipes (rank these — do not invent ids):',
+    candidateLines,
+    '',
+    'Return ONLY a JSON object:',
+    '{ "interpretation": string (≤12 words), "matches": [{ "recipe_id": string, "fit_reason": string (≤12 words) }], "notes": string (optional) }',
+    'Pick 3–5 best. recipe_id MUST be copied exactly from the list above.',
+    '',
+    'JSON:',
+  ].join('\n');
+}
+
+function buildPolishPrompt(candidate: Recipe, data: DataIndex): string {
+  const ingredientLines = candidate.ingredients
+    .map((ri) => {
+      const name = data.ingredientById.get(ri.ingredientId)?.name ?? ri.ingredientId;
+      return `- ${name}: ${ri.amountDisplay}${ri.notes ? ` (${ri.notes})` : ''}`;
+    })
+    .join('\n');
+  return [
+    'Polish a pre-structured cocktail recipe. The ingredients, amounts, glass, and method are FIXED — do not change them.',
+    '',
+    `Family: ${candidate.family} · Method: ${candidate.method} · Glass: ${candidate.glass}`,
+    `Ingredients:\n${ingredientLines}`,
+    `Current placeholder name: ${candidate.name}`,
+    '',
+    'Return ONLY a JSON object:',
+    '{ "name": string (≤4 words, no "The" unless needed), "garnish": string (short phrase), "instructions": string (2-3 sentences), "reasoning": string (1 sentence) }',
+    '',
+    'JSON:',
+  ].join('\n');
+}
+
+// --- Pre-selection ----------------------------------------------------------
+// Grab a reasonable candidate pool the model can rank. Uses the existing
+// pantry matcher as the spine, then pads with recent recipes of matching
+// family if the pantry is sparse. Caps the list so the prompt stays small.
+
+function preselect(query: string, pantryIds: string[], data: DataIndex): Recipe[] {
+  const MAX = 10;
+  const seen = new Set<string>();
+  const out: Recipe[] = [];
+
+  const pantryMatches = matchRecipes(pantryIds, {}, data);
+  for (const m of pantryMatches) {
+    if (out.length >= MAX) break;
+    if (seen.has(m.recipe.id)) continue;
+    seen.add(m.recipe.id);
+    out.push(m.recipe);
+  }
+
+  if (out.length < MAX) {
+    const q = query.toLowerCase();
+    for (const r of data.recipes) {
+      if (out.length >= MAX) break;
+      if (seen.has(r.id)) continue;
+      const hay = `${r.name} ${r.family} ${(RECIPE_TAGS[r.id] ?? []).join(' ')}`.toLowerCase();
+      if (q && q.split(/\s+/).some((w) => w.length > 2 && hay.includes(w))) {
+        seen.add(r.id);
+        out.push(r);
+      }
+    }
+  }
+
+  // If still sparse, pad with IBA officials.
+  if (out.length < 4) {
+    const fallback: SearchRecipesArgs = { max_results: MAX };
+    for (const hit of search_recipes(fallback, data)) {
+      if (out.length >= MAX) break;
+      const r = data.recipes.find((x) => x.id === hit.recipe_id);
+      if (!r || seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push(r);
+    }
+  }
+
+  return out;
+}
+
+// --- Output mapping ---------------------------------------------------------
+
+function mapParseOutput(parsed: any, data: DataIndex): ParsedPantry {
+  const resolvedRaw = Array.isArray(parsed?.resolved) ? parsed.resolved : [];
+  const resolved = resolvedRaw
+    .map((r: any) => {
+      const id = String(r?.ingredient_id ?? '');
+      const ing = data.ingredientById.get(id);
+      if (!ing) return null;
+      return {
+        input: String(r?.input ?? ing.name),
+        ingredientId: id,
+        ingredientName: ing.name,
+        confidence: typeof r?.confidence === 'number' ? r.confidence : 0.6,
+      };
+    })
+    .filter((x: unknown): x is NonNullable<typeof x> => x !== null);
+
+  // Dedupe by ingredient id.
+  const seen = new Set<string>();
+  const deduped = resolved.filter((r: { ingredientId: string }) => {
+    if (seen.has(r.ingredientId)) return false;
+    seen.add(r.ingredientId);
+    return true;
+  });
+  return {
+    resolved: deduped,
+    unresolved: Array.isArray(parsed?.unresolved)
+      ? parsed.unresolved.map((u: unknown) => String(u))
+      : [],
+  };
+}
+
+function mapIntentOutput(
+  parsed: any,
+  data: DataIndex,
+  pantryIds: string[],
+  candidates: Recipe[],
+): IntentSearchResult {
+  const candidateIds = new Set(candidates.map((r) => r.id));
+  const pantryMatches = matchRecipes(pantryIds, {}, data);
+  const matchByRecipe = new Map(pantryMatches.map((m) => [m.recipe.id, m]));
+
+  const raw = Array.isArray(parsed?.matches) ? parsed.matches : [];
+  const matches: IntentMatch[] = raw
+    .map((m: any) => {
+      const id = String(m?.recipe_id ?? '').trim();
+      if (!candidateIds.has(id)) return null; // hallucinated id — drop
+      const recipe = data.recipes.find((r) => r.id === id);
+      if (!recipe) return null;
+      const det = matchByRecipe.get(id);
+      let makeability: IntentMatch['makeability'] = 'cannot_make';
+      let substitutions: IntentMatch['substitutions'] = [];
+      let missing: string[] = [];
+      if (det) {
+        if (det.tier === 'exact') makeability = 'now';
+        else if (det.tier === 'near') makeability = 'with_substitute';
+        else if (det.tier === 'almost') makeability = 'missing_one';
+        substitutions = det.substitutions.map((s) => ({
+          original: s.originalId,
+          use: s.useId,
+        }));
+        missing = det.missing;
+      } else {
+        const needed = recipe.ingredients
+          .filter((ri) => !ri.optional)
+          .map((ri) => ri.ingredientId);
+        const { missing: miss } = check_pantry(needed, pantryIds, data);
+        missing = miss;
+      }
+      return {
+        recipeId: id,
+        recipeName: recipe.name,
+        fitReason: String(m?.fit_reason ?? '').slice(0, 120),
+        makeability,
+        substitutions,
+        missing,
+        tags: (RECIPE_TAGS[id] ?? []) as FlavorTag[],
+      };
+    })
+    .filter((x: IntentMatch | null): x is IntentMatch => x !== null);
+
+  return {
+    interpretation: String(parsed?.interpretation ?? '').slice(0, 120),
+    matches,
+    notes:
+      typeof parsed?.notes === 'string' && parsed.notes.length
+        ? String(parsed.notes).slice(0, 240)
+        : undefined,
+  };
+}
+
+// --- Helpers ---------------------------------------------------------------
+
+function sampleVocabulary(data: DataIndex): string {
+  // Show the model a compact vocabulary. Too much of a 125-item list blows
+  // the on-device prompt budget and dilutes attention.
+  return data.ingredients
+    .slice(0, 40)
+    .map((i) => `${i.id} (${i.name})`)
+    .join(', ');
+}
+
+function sanitiseString(v: unknown, fallback: string, maxLen: number): string {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return fallback;
+  return s.length > maxLen ? s.slice(0, maxLen) : s;
+}
+
+export function safeJsonParse(text: string): any {
+  // Small LLMs wrap JSON in code fences, apologise before/after, or emit
+  // trailing commas. Try a few progressively looser repairs before giving up.
+  const direct = tryParse(text);
+  if (direct !== undefined) return direct;
+
+  // Strip Markdown fences.
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    const f = tryParse(fenced[1]);
+    if (f !== undefined) return f;
+  }
+
+  // Extract the first balanced {...} block.
+  const firstBrace = text.indexOf('{');
+  if (firstBrace >= 0) {
+    let depth = 0;
+    for (let i = firstBrace; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') {
+        depth--;
+        if (depth === 0) {
+          const slice = text.slice(firstBrace, i + 1);
+          const parsed = tryParse(slice) ?? tryParse(slice.replace(/,\s*([}\]])/g, '$1'));
+          if (parsed !== undefined) return parsed;
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function tryParse(s: string): any | undefined {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return undefined;
+  }
+}
+
+// JSON schemas. Stringified so the plugin can forward them to MediaPipe's
+// constrained-decoding API when available. When unsupported, the prompt itself
+// gives the shape and safeJsonParse handles small deviations.
+
+const PARSE_SCHEMA = JSON.stringify({
+  type: 'object',
+  properties: {
+    resolved: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          input: { type: 'string' },
+          ingredient_id: { type: 'string' },
+          confidence: { type: 'number' },
+        },
+        required: ['input', 'ingredient_id', 'confidence'],
+      },
+    },
+    unresolved: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['resolved', 'unresolved'],
+});
+
+const INTENT_SCHEMA = JSON.stringify({
+  type: 'object',
+  properties: {
+    interpretation: { type: 'string' },
+    matches: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          recipe_id: { type: 'string' },
+          fit_reason: { type: 'string' },
+        },
+        required: ['recipe_id', 'fit_reason'],
+      },
+    },
+    notes: { type: 'string' },
+  },
+  required: ['interpretation', 'matches'],
+});
+
+const POLISH_SCHEMA = JSON.stringify({
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    garnish: { type: 'string' },
+    instructions: { type: 'string' },
+    reasoning: { type: 'string' },
+  },
+  required: ['name', 'garnish', 'instructions', 'reasoning'],
+});
