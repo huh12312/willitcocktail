@@ -12,7 +12,8 @@
     "typecheck": "tsc -b --noEmit",
     "pipeline:export": "node data-pipeline/export_seed.mjs",
     "pipeline:build": "python3 data-pipeline/build_db.py",
-    "pipeline": "npm run pipeline:export && npm run pipeline:build",
+    "pipeline:version": "node data-pipeline/emit_version.mjs",
+    "pipeline": "npm run pipeline:export && npm run pipeline:build && npm run pipeline:version",
     "cap:sync": "npm run build && cap sync",
     "android:open": "cap open android"
   },
@@ -35,6 +36,7 @@
     "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^25.0.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",

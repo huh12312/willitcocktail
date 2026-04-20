@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { LLM_PRESETS, isCloudConfigured, useLlmSettings } from '../llm';
+import { useSnapshotStatus } from '../store/snapshot-status';
+import { checkAndInstallSnapshot, snapshotConfigFromEnv } from '../data/snapshot';
 
 interface LlmSettingsProps {
   open: boolean;
@@ -145,6 +147,8 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
           </p>
         </section>
 
+        <DbSnapshotSection />
+
         <div className="flex items-center justify-between pt-3 border-t border-amber-800/30">
           <div className="text-xs">
             {choice === 'heuristic' ? (
@@ -165,5 +169,74 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function DbSnapshotSection() {
+  const { currentVersion, pendingVersion, lastCheckedAt, lastError, applySync } =
+    useSnapshotStatus();
+  const [checking, setChecking] = useState(false);
+  const cfg = snapshotConfigFromEnv();
+
+  async function checkNow() {
+    if (!cfg) return;
+    setChecking(true);
+    try {
+      const result = await checkAndInstallSnapshot(cfg, currentVersion);
+      applySync(result);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <section className="mb-5 pt-4 border-t border-amber-800/30">
+      <label className="text-xs uppercase tracking-wider text-amber-400/70">
+        Recipe database
+      </label>
+      <div className="mt-2 text-xs text-amber-200/80 space-y-1">
+        <div>
+          Current version:{' '}
+          <span className="font-mono text-amber-300">{currentVersion ?? '—'}</span>
+        </div>
+        {pendingVersion && pendingVersion !== currentVersion && (
+          <div className="text-emerald-300">
+            New snapshot{' '}
+            <span className="font-mono">{pendingVersion}</span> installed —
+            reload the page to apply.
+          </div>
+        )}
+        {lastCheckedAt && (
+          <div className="text-amber-400/60">
+            Last checked {new Date(lastCheckedAt).toLocaleString()}
+          </div>
+        )}
+        {lastError && <div className="text-rose-300/80">Error: {lastError}</div>}
+        {!cfg && (
+          <div className="text-amber-400/60">
+            Remote sync disabled — set <code>VITE_SNAPSHOT_URL</code> at build time.
+          </div>
+        )}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={() => void checkNow()}
+          disabled={!cfg || checking}
+          className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          {checking ? 'Checking…' : 'Check for updates'}
+        </button>
+        {pendingVersion && pendingVersion !== currentVersion && (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md bg-emerald-500/20 border border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/30 transition"
+          >
+            Reload to apply
+          </button>
+        )}
+      </div>
+    </section>
   );
 }

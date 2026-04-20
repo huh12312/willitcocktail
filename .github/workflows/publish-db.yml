@@ -1,0 +1,79 @@
+name: publish-db
+
+# Weekly snapshot build + publish. Runs the data pipeline, emits a fresh
+# cocktails.db + db-version.json, and uploads them as a GitHub Pages site.
+# Clients with VITE_SNAPSHOT_URL pointed at the Pages URL pick it up on
+# cold start.
+#
+# Pages on private repos requires GitHub Team/Enterprise. If this repo
+# stays on the free plan, either (a) flip it public, or (b) swap the
+# deploy step for a rsync/scp/R2/S3 publisher.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC — pick an off-peak minute
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build but don't publish"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish-db
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.emit.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: npm ci
+
+      - name: Run pipeline
+        run: npm run pipeline
+
+      - name: Record version output
+        id: emit
+        run: |
+          v=$(node -e "process.stdout.write(require('./public/db-version.json').version)")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Built version $v"
+
+      - name: Stage publishable artifacts
+        run: |
+          mkdir -p _publish
+          cp public/cocktails.db _publish/
+          cp public/db-version.json _publish/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _publish
+
+  deploy:
+    needs: build
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

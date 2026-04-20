@@ -1,6 +1,7 @@
 import initSqlJs, { type Database } from 'sql.js';
 import type { Ingredient, IngredientAlias, Recipe, Substitute } from '../types';
 import { buildDataIndex, type DataIndex } from './index';
+import { readInstalledSnapshot } from './snapshot';
 
 export interface SqliteLoadOptions {
   dbUrl?: string;
@@ -17,6 +18,15 @@ async function openDb(opts: SqliteLoadOptions = {}): Promise<Database> {
   const SQL = await initSqlJs({
     locateFile: () => wasmUrl,
   });
+
+  // Prefer a user-installed snapshot (downloaded from the publisher and
+  // stashed in IndexedDB) over the bundled DB. Falls back transparently if
+  // the browser lacks IDB or nothing is installed.
+  const installed = await readInstalledSnapshot();
+  if (installed) {
+    dbInstance = new SQL.Database(installed.bytes);
+    return dbInstance;
+  }
 
   const response = await fetch(dbUrl);
   if (!response.ok) {
