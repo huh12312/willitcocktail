@@ -73,7 +73,7 @@ export interface Recipe {
   abv?: number;
   ingredients: RecipeIngredient[];
   ibaOfficial?: boolean;
-  source: 'iba' | 'cocktaildb' | 'cocktailfyi' | 'generated' | 'user';
+  source: 'iba' | 'cocktaildb' | 'cocktailfyi' | 'generated' | 'user' | 'huggingface';
 }
 
 export type MatchTier = 'exact' | 'near' | 'almost';

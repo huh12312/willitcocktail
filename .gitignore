@@ -8,5 +8,7 @@ coverage
 *.tsbuildinfo
 .claude/
 data-pipeline/.tmp-*.mjs
+data-pipeline/hf_candidates.json
+data-pipeline/hf_candidates_*.json
 playwright-report/
 test-results/
