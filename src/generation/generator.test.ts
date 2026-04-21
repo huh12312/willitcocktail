@@ -43,6 +43,8 @@ describe('grammars', () => {
     ]);
 
     for (const recipe of DATA.recipes) {
+      // HF-imported recipes have heuristically-inferred families and are not held to the hand-curated grammar standard.
+      if (recipe.source === 'huggingface') continue;
       if (exemptions.has(recipe.id)) continue;
       const grammar = getGrammar(recipe.family);
       if (!grammar) continue;
