@@ -88,11 +88,45 @@ def parse_qty(raw: str) -> tuple[float | None, str]:
 _PAREN_RE = re.compile(r"\s*\([^)]*\)")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9 ]+")
 
-# Common brand/modifier prefix noise stripped before alias lookup
+# The source dataset strips non-ASCII accents which splits accented words like
+# "crème" into "cr me". These substitutions rejoin the known fragments.
+_ACCENT_FIXES = [
+    (re.compile(r"\bcr me\b"), "creme"),
+    (re.compile(r"\bm re\b"), "mure"),
+    (re.compile(r"\bmyr tille\b"), "myrtille"),
+    (re.compile(r"\bbr sil\b"), "bresil"),
+    (re.compile(r"\bj germeister\b"), "jagermeister"),
+    (re.compile(r"\bp che\b"), "peche"),
+    (re.compile(r"\bp ch\b"), "peche"),
+    (re.compile(r"\bg ant\b"), "geant"),
+    (re.compile(r"\bkahl a\b"), "kahlua"),
+    (re.compile(r"\bb n dictine\b"), "benedictine"),
+    (re.compile(r"\bb n dict\b"), "benedictine"),
+    (re.compile(r"\bk mmel\b"), "kummel"),
+    (re.compile(r"\bnapol on\b"), "napoleon"),
+    (re.compile(r"\bcuara ao\b"), "curacao"),
+    (re.compile(r"\bcura ao\b"), "curacao"),
+    (re.compile(r"\bpur e\b"), "puree"),
+]
+
+# Common brand/modifier prefix noise stripped before alias lookup. Some
+# brands are multiple words; those are handled below.
 _NOISE_TOKENS = {
     "fresh", "freshly", "squeezed", "homemade", "premium", "top-shelf", "chilled",
     "cold", "hot", "warm", "strained",
+    # Single-word brand prefixes
+    "giffard", "warninks", "pallini", "luxardo", "chambord", "bobs", "bob",
+    "stones", "stone", "tuaca", "pernod",
 }
+
+# Multi-word brand prefixes: stripped only when they appear at the start.
+_NOISE_PREFIXES = [
+    "de kuyper",
+    "kwai feh",
+    "marie brizard",
+    "st germain",
+    "teichenne schnapps",
+]
 
 
 def _canon(s: str) -> str:
@@ -100,7 +134,13 @@ def _canon(s: str) -> str:
     s = _PAREN_RE.sub("", s)
     s = _NON_ALNUM_RE.sub(" ", s)
     s = re.sub(r"\s+", " ", s).strip()
-    # drop leading noise tokens
+    for pat, repl in _ACCENT_FIXES:
+        s = pat.sub(repl, s)
+    # strip multi-word brand prefixes
+    for prefix in _NOISE_PREFIXES:
+        if s.startswith(prefix + " "):
+            s = s[len(prefix) + 1 :]
+    # drop leading single-token noise
     parts = s.split(" ")
     while parts and parts[0] in _NOISE_TOKENS:
         parts.pop(0)

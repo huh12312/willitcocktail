@@ -10,16 +10,21 @@ interface MatchesPanelProps {
 
 export function MatchesPanel({ onSelect }: MatchesPanelProps) {
   const data = useData();
-  const { ingredients, strictMode, minStrength, toggleStrict } = usePantry();
+  const { ingredients, strictMode, classicsOnly, minStrength, toggleStrict, toggleClassicsOnly } =
+    usePantry();
 
   const results = useMemo(
     () =>
       matchRecipes(
         ingredients,
-        { strict: strictMode, minSubstituteStrength: minStrength },
+        {
+          strict: strictMode,
+          minSubstituteStrength: minStrength,
+          classicsOnly,
+        },
         data,
       ),
-    [data, ingredients, strictMode, minStrength],
+    [data, ingredients, strictMode, classicsOnly, minStrength],
   );
 
   const groups = useMemo(() => groupByTier(results), [results]);
@@ -29,17 +34,29 @@ export function MatchesPanel({ onSelect }: MatchesPanelProps) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="text-sm text-amber-300/80">
           {results.length} match{results.length === 1 ? '' : 'es'}
-          {strictMode && ' (strict mode)'}
+          {strictMode && ' (strict)'}
+          {classicsOnly && ' (classics)'}
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={strictMode}
-            onChange={toggleStrict}
-            className="accent-amber-500"
-          />
-          Strict mode
-        </label>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={classicsOnly}
+              onChange={toggleClassicsOnly}
+              className="accent-amber-500"
+            />
+            Classics only
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={strictMode}
+              onChange={toggleStrict}
+              className="accent-amber-500"
+            />
+            Strict mode
+          </label>
+        </div>
       </div>
 
       {ingredients.length === 0 && (

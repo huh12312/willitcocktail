@@ -5,9 +5,35 @@ export interface MatchOptions {
   strict?: boolean; // only exact matches
   minSubstituteStrength?: number; // default 0.7
   nearMatchLimit?: number; // how many ingredients may be swapped; default 1
+  classicsOnly?: boolean; // hide unreviewed/generated sources (e.g. huggingface imports)
 }
 
 const DEFAULT_MIN_STRENGTH = 0.7;
+
+// Source weighting: curated sources rank above imported noise. Generated
+// candidates get nothing — they're meant to be saved to the `user` source
+// after inspection.
+const SOURCE_BONUS: Record<Recipe['source'], number> = {
+  iba: 100,
+  user: 70,
+  cocktaildb: 50,
+  cocktailfyi: 50,
+  huggingface: 0,
+  generated: 0,
+};
+
+// Classics-only = curated human sources. Huggingface imports are unreviewed
+// and generated recipes are ephemeral candidates.
+const CLASSIC_SOURCES: ReadonlySet<Recipe['source']> = new Set([
+  'iba',
+  'user',
+  'cocktaildb',
+  'cocktailfyi',
+]);
+
+function isClassic(recipe: Recipe): boolean {
+  return recipe.ibaOfficial === true || CLASSIC_SOURCES.has(recipe.source);
+}
 
 /**
  * A pantry ingredient satisfies a recipe ingredient if:
@@ -101,10 +127,11 @@ function evaluate(
 }
 
 function recipeRank(recipe: Recipe): number {
-  // Higher is better. IBA official gets a boost; ties broken by ingredient count (shorter = more accessible).
-  let score = 0;
-  if (recipe.ibaOfficial) score += 100;
-  score -= recipe.ingredients.length; // shorter recipes rank slightly higher on ties
+  // Higher is better. Source bonus dominates; ibaOfficial stacks; ties broken
+  // by ingredient count (shorter = more accessible).
+  let score = SOURCE_BONUS[recipe.source] ?? 0;
+  if (recipe.ibaOfficial) score += 50;
+  score -= recipe.ingredients.length;
   return score;
 }
 
@@ -120,6 +147,7 @@ export function matchRecipes(
   const results: MatchResult[] = [];
 
   for (const recipe of data.recipes) {
+    if (options.classicsOnly && !isClassic(recipe)) continue;
     const evalResult = evaluate(recipe, pantry, data, minStrength);
 
     if (evalResult.missing.length === 0) {

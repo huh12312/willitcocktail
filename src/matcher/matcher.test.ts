@@ -212,6 +212,50 @@ describe('matcher — strict mode', () => {
   });
 });
 
+describe('matcher — classics-only mode', () => {
+  // Fixture with one IBA recipe and one huggingface-sourced recipe that share
+  // the same pantry requirement. classicsOnly should retain only the IBA one.
+  const mixedRecipes: Recipe[] = [
+    ...recipes,
+    {
+      id: 'obscure_hf',
+      name: 'Obscure HF Candidate',
+      family: 'sour',
+      method: 'shake',
+      glass: 'coupe',
+      instructions: '',
+      source: 'huggingface',
+      ingredients: [
+        { ingredientId: 'gin', amountMl: 60, amountDisplay: '2 oz', position: 1 },
+        { ingredientId: 'lime_juice', amountMl: 22, amountDisplay: '0.75 oz', position: 2 },
+        { ingredientId: 'simple_syrup', amountMl: 15, amountDisplay: '0.5 oz', position: 3 },
+      ],
+    },
+  ];
+  const mixedData = buildDataIndex(ingredients, aliases, substitutes, mixedRecipes);
+
+  it('excludes huggingface-sourced recipes when classicsOnly is true', () => {
+    const pantry = ['gin', 'lime_juice', 'simple_syrup'];
+    const all = matchRecipes(pantry, {}, mixedData);
+    const classics = matchRecipes(pantry, { classicsOnly: true }, mixedData);
+
+    expect(all.find((r) => r.recipe.id === 'obscure_hf')).toBeDefined();
+    expect(classics.find((r) => r.recipe.id === 'obscure_hf')).toBeUndefined();
+    // IBA gimlet should still be present
+    expect(classics.find((r) => r.recipe.id === 'gimlet')?.tier).toBe('exact');
+  });
+
+  it('ranks IBA above huggingface when both match exactly', () => {
+    const pantry = ['gin', 'lime_juice', 'simple_syrup'];
+    const results = matchRecipes(pantry, {}, mixedData);
+    const gimletIdx = results.findIndex((r) => r.recipe.id === 'gimlet');
+    const hfIdx = results.findIndex((r) => r.recipe.id === 'obscure_hf');
+    expect(gimletIdx).toBeGreaterThanOrEqual(0);
+    expect(hfIdx).toBeGreaterThanOrEqual(0);
+    expect(gimletIdx).toBeLessThan(hfIdx);
+  });
+});
+
 describe('groupByTier', () => {
   it('separates results into three buckets', () => {
     const pantry = ['gin', 'lemon_juice', 'simple_syrup', 'tonic_water'];

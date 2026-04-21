@@ -389,6 +389,96 @@
       "category": "liqueur"
     },
     {
+      "id": "advocaat",
+      "name": "Advocaat",
+      "category": "liqueur"
+    },
+    {
+      "id": "butterscotch_liqueur",
+      "name": "Butterscotch Liqueur",
+      "category": "liqueur"
+    },
+    {
+      "id": "coconut_rum",
+      "name": "Coconut Rum (Malibu)",
+      "category": "liqueur"
+    },
+    {
+      "id": "apricot_brandy",
+      "name": "Apricot Brandy Liqueur",
+      "category": "liqueur"
+    },
+    {
+      "id": "southern_comfort",
+      "name": "Southern Comfort",
+      "category": "liqueur"
+    },
+    {
+      "id": "creme_de_banane",
+      "name": "Crème de Banane",
+      "category": "liqueur"
+    },
+    {
+      "id": "limoncello",
+      "name": "Limoncello",
+      "category": "liqueur"
+    },
+    {
+      "id": "jagermeister",
+      "name": "Jägermeister",
+      "category": "liqueur"
+    },
+    {
+      "id": "poire_william",
+      "name": "Poire William Eau-de-Vie",
+      "category": "spirit"
+    },
+    {
+      "id": "mandarine_napoleon",
+      "name": "Mandarine Napoléon",
+      "category": "liqueur"
+    },
+    {
+      "id": "tuaca",
+      "name": "Tuaca",
+      "category": "liqueur"
+    },
+    {
+      "id": "lychee_liqueur",
+      "name": "Lychee Liqueur",
+      "category": "liqueur"
+    },
+    {
+      "id": "becherovka",
+      "name": "Becherovka",
+      "category": "liqueur"
+    },
+    {
+      "id": "anisette",
+      "name": "Anisette",
+      "category": "liqueur"
+    },
+    {
+      "id": "parfait_amour",
+      "name": "Parfait Amour",
+      "category": "liqueur"
+    },
+    {
+      "id": "pisang_ambon",
+      "name": "Pisang Ambon",
+      "category": "liqueur"
+    },
+    {
+      "id": "dubonnet_rouge",
+      "name": "Dubonnet Rouge",
+      "category": "wine"
+    },
+    {
+      "id": "maple_syrup",
+      "name": "Maple Syrup",
+      "category": "syrup"
+    },
+    {
       "id": "prosecco",
       "name": "Prosecco",
       "category": "wine"
@@ -1851,6 +1941,342 @@
     {
       "alias": "caster sugar",
       "ingredientId": "sugar"
+    },
+    {
+      "alias": "single cream half and half",
+      "ingredientId": "cream"
+    },
+    {
+      "alias": "half and half",
+      "ingredientId": "cream"
+    },
+    {
+      "alias": "single cream",
+      "ingredientId": "cream"
+    },
+    {
+      "alias": "whipping cream",
+      "ingredientId": "cream"
+    },
+    {
+      "alias": "italian red bitter liqueur",
+      "ingredientId": "campari"
+    },
+    {
+      "alias": "bitter liqueur",
+      "ingredientId": "campari"
+    },
+    {
+      "alias": "red bitter liqueur",
+      "ingredientId": "campari"
+    },
+    {
+      "alias": "american whiskey",
+      "ingredientId": "bourbon"
+    },
+    {
+      "alias": "southern usa style liqueur 40",
+      "ingredientId": "southern_comfort"
+    },
+    {
+      "alias": "southern comfort",
+      "ingredientId": "southern_comfort"
+    },
+    {
+      "alias": "advocaat liqueur",
+      "ingredientId": "advocaat"
+    },
+    {
+      "alias": "advocaat",
+      "ingredientId": "advocaat"
+    },
+    {
+      "alias": "butterscotch liqueur",
+      "ingredientId": "butterscotch_liqueur"
+    },
+    {
+      "alias": "butterscotch",
+      "ingredientId": "butterscotch_liqueur"
+    },
+    {
+      "alias": "coconut rum liqueur",
+      "ingredientId": "coconut_rum"
+    },
+    {
+      "alias": "coconut rum",
+      "ingredientId": "coconut_rum"
+    },
+    {
+      "alias": "malibu",
+      "ingredientId": "coconut_rum"
+    },
+    {
+      "alias": "coconut liqueur",
+      "ingredientId": "coconut_rum"
+    },
+    {
+      "alias": "apricot brandy liqueur",
+      "ingredientId": "apricot_brandy"
+    },
+    {
+      "alias": "apricot brandy",
+      "ingredientId": "apricot_brandy"
+    },
+    {
+      "alias": "apricot liqueur",
+      "ingredientId": "apricot_brandy"
+    },
+    {
+      "alias": "peach liqueur",
+      "ingredientId": "creme_de_peche"
+    },
+    {
+      "alias": "peach schnapps",
+      "ingredientId": "creme_de_peche"
+    },
+    {
+      "alias": "creme de peche",
+      "ingredientId": "creme_de_peche"
+    },
+    {
+      "alias": "creme de peche liqueur",
+      "ingredientId": "creme_de_peche"
+    },
+    {
+      "alias": "sour apple liqueur",
+      "ingredientId": "apricot_brandy"
+    },
+    {
+      "alias": "banana",
+      "ingredientId": "creme_de_banane"
+    },
+    {
+      "alias": "banana liqueur",
+      "ingredientId": "creme_de_banane"
+    },
+    {
+      "alias": "creme de banane",
+      "ingredientId": "creme_de_banane"
+    },
+    {
+      "alias": "creme de banane liqueur",
+      "ingredientId": "creme_de_banane"
+    },
+    {
+      "alias": "green banana liqueur",
+      "ingredientId": "pisang_ambon"
+    },
+    {
+      "alias": "pisang ambon liqueur",
+      "ingredientId": "pisang_ambon"
+    },
+    {
+      "alias": "pisang ambon",
+      "ingredientId": "pisang_ambon"
+    },
+    {
+      "alias": "brown creme de cacao",
+      "ingredientId": "creme_de_cacao_dark"
+    },
+    {
+      "alias": "dark creme de cacao",
+      "ingredientId": "creme_de_cacao_dark"
+    },
+    {
+      "alias": "creme de cacao brown",
+      "ingredientId": "creme_de_cacao_dark"
+    },
+    {
+      "alias": "creme de cacao dark",
+      "ingredientId": "creme_de_cacao_dark"
+    },
+    {
+      "alias": "white creme de cacao",
+      "ingredientId": "creme_de_cacao_white"
+    },
+    {
+      "alias": "creme de cacao white",
+      "ingredientId": "creme_de_cacao_white"
+    },
+    {
+      "alias": "creme de cacao",
+      "ingredientId": "creme_de_cacao_white"
+    },
+    {
+      "alias": "creme de menthe",
+      "ingredientId": "creme_de_menthe_green"
+    },
+    {
+      "alias": "peppermint pastille creme de menthe",
+      "ingredientId": "creme_de_menthe_white"
+    },
+    {
+      "alias": "creme de mure liqueur",
+      "ingredientId": "creme_de_mure"
+    },
+    {
+      "alias": "creme de mure",
+      "ingredientId": "creme_de_mure"
+    },
+    {
+      "alias": "blackberry liqueur",
+      "ingredientId": "creme_de_mure"
+    },
+    {
+      "alias": "creme de framboise liqueur",
+      "ingredientId": "creme_de_framboise"
+    },
+    {
+      "alias": "framboise de ronce",
+      "ingredientId": "creme_de_framboise"
+    },
+    {
+      "alias": "creme de myrtille liqueur",
+      "ingredientId": "creme_de_cassis"
+    },
+    {
+      "alias": "blueberry liqueur",
+      "ingredientId": "creme_de_cassis"
+    },
+    {
+      "alias": "blueberries",
+      "ingredientId": "creme_de_cassis"
+    },
+    {
+      "alias": "fraise des bois",
+      "ingredientId": "creme_de_framboise"
+    },
+    {
+      "alias": "strawberry liqueur",
+      "ingredientId": "creme_de_framboise"
+    },
+    {
+      "alias": "anisette liqueur",
+      "ingredientId": "anisette"
+    },
+    {
+      "alias": "anis liqueur",
+      "ingredientId": "anisette"
+    },
+    {
+      "alias": "anise liqueur",
+      "ingredientId": "anisette"
+    },
+    {
+      "alias": "pernod anise",
+      "ingredientId": "absinthe"
+    },
+    {
+      "alias": "pernod",
+      "ingredientId": "absinthe"
+    },
+    {
+      "alias": "ricard",
+      "ingredientId": "absinthe"
+    },
+    {
+      "alias": "sambuca liqueur",
+      "ingredientId": "sambuca"
+    },
+    {
+      "alias": "black sambuca liqueur",
+      "ingredientId": "sambuca"
+    },
+    {
+      "alias": "limoncello liqueur",
+      "ingredientId": "limoncello"
+    },
+    {
+      "alias": "limoncello",
+      "ingredientId": "limoncello"
+    },
+    {
+      "alias": "jagermeister",
+      "ingredientId": "jagermeister"
+    },
+    {
+      "alias": "poire william eau de vie",
+      "ingredientId": "poire_william"
+    },
+    {
+      "alias": "poire william",
+      "ingredientId": "poire_william"
+    },
+    {
+      "alias": "mandarine napoleon liqueur",
+      "ingredientId": "mandarine_napoleon"
+    },
+    {
+      "alias": "mandarine napoleon",
+      "ingredientId": "mandarine_napoleon"
+    },
+    {
+      "alias": "tuaca liqueur",
+      "ingredientId": "tuaca"
+    },
+    {
+      "alias": "lychee liqueur",
+      "ingredientId": "lychee_liqueur"
+    },
+    {
+      "alias": "kwai feh lychee liqueur",
+      "ingredientId": "lychee_liqueur"
+    },
+    {
+      "alias": "becherovka liqueur",
+      "ingredientId": "becherovka"
+    },
+    {
+      "alias": "parfait amour liqueur",
+      "ingredientId": "parfait_amour"
+    },
+    {
+      "alias": "parfait amour",
+      "ingredientId": "parfait_amour"
+    },
+    {
+      "alias": "dubonnet red",
+      "ingredientId": "dubonnet_rouge"
+    },
+    {
+      "alias": "dubonnet rouge",
+      "ingredientId": "dubonnet_rouge"
+    },
+    {
+      "alias": "dubonnet",
+      "ingredientId": "dubonnet_rouge"
+    },
+    {
+      "alias": "shiraz red wine",
+      "ingredientId": "port"
+    },
+    {
+      "alias": "red wine",
+      "ingredientId": "port"
+    },
+    {
+      "alias": "sauvignon blanc wine",
+      "ingredientId": "sherry_fino"
+    },
+    {
+      "alias": "white wine",
+      "ingredientId": "sherry_fino"
+    },
+    {
+      "alias": "maple syrup",
+      "ingredientId": "maple_syrup"
+    },
+    {
+      "alias": "vanilla bitters",
+      "ingredientId": "aromatic_bitters"
+    },
+    {
+      "alias": "abbotts bitters",
+      "ingredientId": "aromatic_bitters"
+    },
+    {
+      "alias": "vermouth amaro",
+      "ingredientId": "vermouth_sweet"
     }
   ],
   "substitutes": [
@@ -5465,5 +5891,5 @@
       ]
     }
   ],
-  "exportedAt": "2026-04-21T02:50:31.183Z"
+  "exportedAt": "2026-04-21T11:34:48.980Z"
 }
