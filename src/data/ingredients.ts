@@ -31,8 +31,13 @@ export const INGREDIENTS: Ingredient[] = [
 
   { id: 'brandy', name: 'Brandy', category: 'spirit' },
   { id: 'cognac', name: 'Cognac', category: 'spirit', parentId: 'brandy' },
+  { id: 'armagnac', name: 'Armagnac', category: 'spirit', parentId: 'brandy' },
   { id: 'pisco', name: 'Pisco', category: 'spirit' },
   { id: 'calvados', name: 'Calvados', category: 'spirit' },
+  { id: 'japanese_whisky', name: 'Japanese Whisky', category: 'spirit', parentId: 'whiskey' },
+  { id: 'rhum_agricole', name: 'Rhum Agricole', category: 'spirit', parentId: 'rum' },
+  { id: 'aquavit', name: 'Aquavit', category: 'spirit' },
+  { id: 'genever', name: 'Genever', category: 'spirit' },
 
   // --- LIQUEURS & FORTIFIED WINES ---
   { id: 'vermouth_dry', name: 'Dry Vermouth', category: 'wine' },
@@ -64,12 +69,36 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'elderflower_liqueur', name: 'Elderflower Liqueur', category: 'liqueur' },
   { id: 'sambuca', name: 'Sambuca', category: 'liqueur' },
   { id: 'absinthe', name: 'Absinthe', category: 'liqueur' },
+  { id: 'creme_de_violette', name: 'Crème de Violette', category: 'liqueur' },
+  { id: 'creme_de_mure', name: 'Crème de Mûre (blackberry)', category: 'liqueur' },
+  { id: 'creme_de_framboise', name: 'Crème de Framboise (raspberry)', category: 'liqueur' },
+  { id: 'creme_de_peche', name: 'Crème de Pêche (peach)', category: 'liqueur' },
+  { id: 'suze', name: 'Suze', category: 'liqueur' },
+  { id: 'pimms', name: "Pimm's No. 1", category: 'liqueur' },
+  { id: 'amaro_montenegro', name: 'Amaro Montenegro', category: 'liqueur' },
+  { id: 'amaro_averna', name: 'Averna', category: 'liqueur' },
+  { id: 'amaretto', name: 'Amaretto', category: 'liqueur' },
+  { id: 'frangelico', name: 'Frangelico', category: 'liqueur' },
+  { id: 'midori', name: 'Midori', category: 'liqueur' },
+  { id: 'licor_43', name: 'Licor 43', category: 'liqueur' },
+  { id: 'chambord', name: 'Chambord', category: 'liqueur' },
+  { id: 'kummel', name: 'Kümmel', category: 'liqueur' },
+  { id: 'st_germain', name: 'St-Germain', category: 'liqueur', parentId: 'elderflower_liqueur' },
+  { id: 'select_aperitivo', name: 'Select Aperitivo', category: 'liqueur' },
 
   // --- WINES ---
   { id: 'prosecco', name: 'Prosecco', category: 'wine' },
   { id: 'champagne', name: 'Champagne', category: 'wine' },
   { id: 'sparkling_wine', name: 'Sparkling Wine', category: 'wine' },
   { id: 'port', name: 'Port', category: 'wine' },
+  { id: 'sherry_fino', name: 'Fino Sherry', category: 'wine' },
+  { id: 'sherry_manzanilla', name: 'Manzanilla Sherry', category: 'wine' },
+  { id: 'sherry_amontillado', name: 'Amontillado Sherry', category: 'wine' },
+  { id: 'sherry_oloroso', name: 'Oloroso Sherry', category: 'wine' },
+  { id: 'sherry_px', name: 'Pedro Ximénez Sherry', category: 'wine' },
+  { id: 'madeira', name: 'Madeira', category: 'wine' },
+  { id: 'punt_e_mes', name: 'Punt e Mes', category: 'wine' },
+  { id: 'sake', name: 'Sake', category: 'wine' },
 
   // --- JUICES ---
   { id: 'lime_juice', name: 'Fresh Lime Juice', category: 'juice' },
@@ -79,6 +108,8 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'pineapple_juice', name: 'Pineapple Juice', category: 'juice' },
   { id: 'cranberry_juice', name: 'Cranberry Juice', category: 'juice' },
   { id: 'tomato_juice', name: 'Tomato Juice', category: 'juice' },
+  { id: 'apple_juice', name: 'Apple Juice', category: 'juice' },
+  { id: 'passion_fruit_juice', name: 'Passion Fruit Juice', category: 'juice' },
 
   // --- SYRUPS ---
   { id: 'simple_syrup', name: 'Simple Syrup', category: 'syrup' },
@@ -89,11 +120,21 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'agave_syrup', name: 'Agave Syrup', category: 'syrup' },
   { id: 'raspberry_syrup', name: 'Raspberry Syrup', category: 'syrup' },
   { id: 'falernum', name: 'Falernum', category: 'syrup' },
+  { id: 'demerara_syrup', name: 'Demerara Syrup', category: 'syrup' },
+  { id: 'cinnamon_syrup', name: 'Cinnamon Syrup', category: 'syrup' },
+  { id: 'ginger_syrup', name: 'Ginger Syrup', category: 'syrup' },
+  { id: 'vanilla_syrup', name: 'Vanilla Syrup', category: 'syrup' },
+  { id: 'pineapple_syrup', name: 'Pineapple Syrup', category: 'syrup' },
+  { id: 'cane_syrup', name: 'Cane Syrup', category: 'syrup' },
 
   // --- BITTERS ---
   { id: 'angostura_bitters', name: 'Angostura Bitters', category: 'bitter' },
   { id: 'orange_bitters', name: 'Orange Bitters', category: 'bitter' },
   { id: 'peychauds_bitters', name: "Peychaud's Bitters", category: 'bitter' },
+  { id: 'aromatic_bitters', name: 'Aromatic Bitters', category: 'bitter' },
+  { id: 'cardamom_bitters', name: 'Cardamom Bitters', category: 'bitter' },
+  { id: 'celery_bitters', name: 'Celery Bitters', category: 'bitter' },
+  { id: 'rhubarb_bitters', name: 'Rhubarb Bitters', category: 'bitter' },
 
   // --- MIXERS ---
   { id: 'soda_water', name: 'Soda Water', category: 'mixer' },
@@ -102,6 +143,9 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'ginger_ale', name: 'Ginger Ale', category: 'mixer' },
   { id: 'cola', name: 'Cola', category: 'mixer' },
   { id: 'lemon_lime_soda', name: 'Lemon-Lime Soda', category: 'mixer' },
+  { id: 'beer', name: 'Beer', category: 'mixer' },
+  { id: 'stout', name: 'Stout', category: 'mixer', parentId: 'beer' },
+  { id: 'sparkling_grapefruit', name: 'Grapefruit Soda', category: 'mixer' },
 
   // --- OTHER ---
   { id: 'sugar_cube', name: 'Sugar Cube', category: 'other' },
@@ -111,6 +155,8 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'cream', name: 'Heavy Cream', category: 'other' },
   { id: 'milk', name: 'Milk', category: 'other' },
   { id: 'coconut_cream', name: 'Coconut Cream', category: 'other' },
+  { id: 'coconut_milk', name: 'Coconut Milk', category: 'other' },
+  { id: 'saline_solution', name: 'Saline Solution', category: 'other' },
   { id: 'salt', name: 'Salt', category: 'other' },
   { id: 'water', name: 'Water', category: 'other' },
 
@@ -267,6 +313,174 @@ export const INGREDIENT_ALIASES: IngredientAlias[] = [
 
   // Chocolate bitters
   { alias: 'chocolate bitters', ingredientId: 'chocolate_bitters' },
+  { alias: 'aromatic bitters', ingredientId: 'aromatic_bitters' },
+  { alias: 'cardamom bitters', ingredientId: 'cardamom_bitters' },
+  { alias: 'celery bitters', ingredientId: 'celery_bitters' },
+  { alias: 'rhubarb bitters', ingredientId: 'rhubarb_bitters' },
+
+  // Liqueur aliases (brand + generic)
+  { alias: 'st germain', ingredientId: 'st_germain' },
+  { alias: 'st-germain', ingredientId: 'st_germain' },
+  { alias: 'elderflower', ingredientId: 'elderflower_liqueur' },
+  { alias: 'elderflower cordial', ingredientId: 'elderflower_liqueur' },
+  { alias: 'creme de violette', ingredientId: 'creme_de_violette' },
+  { alias: 'crème de violette', ingredientId: 'creme_de_violette' },
+  { alias: 'violette', ingredientId: 'creme_de_violette' },
+  { alias: 'creme de mure', ingredientId: 'creme_de_mure' },
+  { alias: 'crème de mûre', ingredientId: 'creme_de_mure' },
+  { alias: 'blackberry liqueur', ingredientId: 'creme_de_mure' },
+  { alias: 'creme de framboise', ingredientId: 'creme_de_framboise' },
+  { alias: 'raspberry liqueur', ingredientId: 'creme_de_framboise' },
+  { alias: 'peach liqueur', ingredientId: 'creme_de_peche' },
+  { alias: 'peach schnapps', ingredientId: 'creme_de_peche' },
+  { alias: 'suze', ingredientId: 'suze' },
+  { alias: "pimm's", ingredientId: 'pimms' },
+  { alias: 'pimms', ingredientId: 'pimms' },
+  { alias: "pimm's no. 1", ingredientId: 'pimms' },
+  { alias: 'amaro montenegro', ingredientId: 'amaro_montenegro' },
+  { alias: 'montenegro', ingredientId: 'amaro_montenegro' },
+  { alias: 'averna', ingredientId: 'amaro_averna' },
+  { alias: 'amaro averna', ingredientId: 'amaro_averna' },
+  { alias: 'amaretto', ingredientId: 'amaretto' },
+  { alias: 'disaronno', ingredientId: 'amaretto' },
+  { alias: 'frangelico', ingredientId: 'frangelico' },
+  { alias: 'hazelnut liqueur', ingredientId: 'frangelico' },
+  { alias: 'midori', ingredientId: 'midori' },
+  { alias: 'melon liqueur', ingredientId: 'midori' },
+  { alias: 'licor 43', ingredientId: 'licor_43' },
+  { alias: 'chambord', ingredientId: 'chambord' },
+  { alias: 'kummel', ingredientId: 'kummel' },
+  { alias: 'kümmel', ingredientId: 'kummel' },
+  { alias: 'select', ingredientId: 'select_aperitivo' },
+  { alias: 'select aperitivo', ingredientId: 'select_aperitivo' },
+  { alias: 'cynar', ingredientId: 'cynar' },
+  { alias: 'fernet', ingredientId: 'fernet_branca' },
+  { alias: 'fernet branca', ingredientId: 'fernet_branca' },
+  { alias: 'fernet-branca', ingredientId: 'fernet_branca' },
+  { alias: 'amaro nonino', ingredientId: 'amaro_nonino' },
+  { alias: 'nonino', ingredientId: 'amaro_nonino' },
+  { alias: 'green chartreuse', ingredientId: 'chartreuse_green' },
+  { alias: 'yellow chartreuse', ingredientId: 'chartreuse_yellow' },
+  { alias: 'chartreuse', ingredientId: 'chartreuse_green' },
+  { alias: 'benedictine', ingredientId: 'benedictine' },
+  { alias: 'bénédictine', ingredientId: 'benedictine' },
+  { alias: 'drambuie', ingredientId: 'drambuie' },
+  { alias: 'galliano', ingredientId: 'galliano' },
+  { alias: 'kahlua', ingredientId: 'kahlua' },
+  { alias: 'kahlúa', ingredientId: 'kahlua' },
+  { alias: 'coffee liqueur', ingredientId: 'kahlua' },
+  { alias: 'maraschino', ingredientId: 'maraschino' },
+  { alias: 'maraschino liqueur', ingredientId: 'maraschino' },
+  { alias: 'luxardo', ingredientId: 'maraschino' },
+  { alias: 'creme de cassis', ingredientId: 'creme_de_cassis' },
+  { alias: 'crème de cassis', ingredientId: 'creme_de_cassis' },
+  { alias: 'cassis', ingredientId: 'creme_de_cassis' },
+  { alias: 'absinthe', ingredientId: 'absinthe' },
+  { alias: 'pastis', ingredientId: 'absinthe' },
+  { alias: 'curacao', ingredientId: 'curacao_orange' },
+  { alias: 'curaçao', ingredientId: 'curacao_orange' },
+  { alias: 'orange curacao', ingredientId: 'curacao_orange' },
+  { alias: 'grand marnier', ingredientId: 'grand_marnier' },
+
+  // Spirit aliases (brand + generic)
+  { alias: 'vodka', ingredientId: 'vodka' },
+  { alias: 'tequila', ingredientId: 'tequila_blanco' },
+  { alias: 'blanco tequila', ingredientId: 'tequila_blanco' },
+  { alias: 'silver tequila', ingredientId: 'tequila_blanco' },
+  { alias: 'reposado tequila', ingredientId: 'tequila_reposado' },
+  { alias: 'mezcal', ingredientId: 'mezcal' },
+  { alias: 'old tom gin', ingredientId: 'gin_old_tom' },
+  { alias: 'plymouth gin', ingredientId: 'gin_plymouth' },
+  { alias: 'irish whiskey', ingredientId: 'irish_whiskey' },
+  { alias: 'japanese whisky', ingredientId: 'japanese_whisky' },
+  { alias: 'japanese whiskey', ingredientId: 'japanese_whisky' },
+  { alias: 'armagnac', ingredientId: 'armagnac' },
+  { alias: 'pisco', ingredientId: 'pisco' },
+  { alias: 'calvados', ingredientId: 'calvados' },
+  { alias: 'apple brandy', ingredientId: 'calvados' },
+  { alias: 'cachaça', ingredientId: 'cachaca' },
+  { alias: 'cachaca', ingredientId: 'cachaca' },
+  { alias: 'rhum agricole', ingredientId: 'rhum_agricole' },
+  { alias: 'aquavit', ingredientId: 'aquavit' },
+  { alias: 'genever', ingredientId: 'genever' },
+
+  // Wines & fortified
+  { alias: 'lillet blanc', ingredientId: 'lillet_blanc' },
+  { alias: 'lillet', ingredientId: 'lillet_blanc' },
+  { alias: 'bianco vermouth', ingredientId: 'vermouth_bianco' },
+  { alias: 'blanc vermouth', ingredientId: 'vermouth_bianco' },
+  { alias: 'fino sherry', ingredientId: 'sherry_fino' },
+  { alias: 'fino', ingredientId: 'sherry_fino' },
+  { alias: 'manzanilla', ingredientId: 'sherry_manzanilla' },
+  { alias: 'manzanilla sherry', ingredientId: 'sherry_manzanilla' },
+  { alias: 'amontillado', ingredientId: 'sherry_amontillado' },
+  { alias: 'oloroso', ingredientId: 'sherry_oloroso' },
+  { alias: 'pedro ximenez', ingredientId: 'sherry_px' },
+  { alias: 'px sherry', ingredientId: 'sherry_px' },
+  { alias: 'sherry', ingredientId: 'sherry_fino' },
+  { alias: 'madeira', ingredientId: 'madeira' },
+  { alias: 'port', ingredientId: 'port' },
+  { alias: 'punt e mes', ingredientId: 'punt_e_mes' },
+  { alias: 'sake', ingredientId: 'sake' },
+  { alias: 'sparkling wine', ingredientId: 'sparkling_wine' },
+  { alias: 'cava', ingredientId: 'sparkling_wine' },
+
+  // Juices
+  { alias: 'apple juice', ingredientId: 'apple_juice' },
+  { alias: 'passion fruit juice', ingredientId: 'passion_fruit_juice' },
+  { alias: 'orange juice', ingredientId: 'orange_juice' },
+  { alias: 'fresh orange juice', ingredientId: 'orange_juice' },
+  { alias: 'grapefruit juice', ingredientId: 'grapefruit_juice' },
+  { alias: 'pineapple juice', ingredientId: 'pineapple_juice' },
+  { alias: 'cranberry juice', ingredientId: 'cranberry_juice' },
+  { alias: 'tomato juice', ingredientId: 'tomato_juice' },
+
+  // Syrups
+  { alias: 'demerara syrup', ingredientId: 'demerara_syrup' },
+  { alias: 'rich simple syrup', ingredientId: 'demerara_syrup' },
+  { alias: 'cinnamon syrup', ingredientId: 'cinnamon_syrup' },
+  { alias: 'ginger syrup', ingredientId: 'ginger_syrup' },
+  { alias: 'vanilla syrup', ingredientId: 'vanilla_syrup' },
+  { alias: 'pineapple syrup', ingredientId: 'pineapple_syrup' },
+  { alias: 'cane syrup', ingredientId: 'cane_syrup' },
+  { alias: 'honey', ingredientId: 'honey_syrup' },
+  { alias: 'honey syrup', ingredientId: 'honey_syrup' },
+  { alias: 'falernum', ingredientId: 'falernum' },
+  { alias: 'orgeat syrup', ingredientId: 'orgeat' },
+  { alias: 'almond syrup', ingredientId: 'orgeat' },
+  { alias: 'raspberry syrup', ingredientId: 'raspberry_syrup' },
+  { alias: 'agave', ingredientId: 'agave_syrup' },
+  { alias: 'agave syrup', ingredientId: 'agave_syrup' },
+  { alias: 'agave nectar', ingredientId: 'agave_syrup' },
+  { alias: 'gomme syrup', ingredientId: 'gomme_syrup' },
+
+  // Mixers
+  { alias: 'ginger beer', ingredientId: 'ginger_beer' },
+  { alias: 'ginger ale', ingredientId: 'ginger_ale' },
+  { alias: 'tonic water', ingredientId: 'tonic_water' },
+  { alias: 'soda water', ingredientId: 'soda_water' },
+  { alias: 'sparkling water', ingredientId: 'soda_water' },
+  { alias: 'cola', ingredientId: 'cola' },
+  { alias: 'coca-cola', ingredientId: 'cola' },
+  { alias: 'coke', ingredientId: 'cola' },
+  { alias: 'lemonade', ingredientId: 'lemon_lime_soda' },
+  { alias: 'sprite', ingredientId: 'lemon_lime_soda' },
+  { alias: '7-up', ingredientId: 'lemon_lime_soda' },
+  { alias: 'beer', ingredientId: 'beer' },
+  { alias: 'stout', ingredientId: 'stout' },
+  { alias: 'grapefruit soda', ingredientId: 'sparkling_grapefruit' },
+
+  // Other
+  { alias: 'coconut milk', ingredientId: 'coconut_milk' },
+  { alias: 'saline', ingredientId: 'saline_solution' },
+  { alias: 'saline solution', ingredientId: 'saline_solution' },
+  { alias: 'egg white', ingredientId: 'egg_white' },
+  { alias: 'whole egg', ingredientId: 'whole_egg' },
+  { alias: 'egg', ingredientId: 'whole_egg' },
+  { alias: 'water', ingredientId: 'water' },
+  { alias: 'sugar', ingredientId: 'sugar' },
+  { alias: 'sugar cube', ingredientId: 'sugar_cube' },
+  { alias: 'caster sugar', ingredientId: 'sugar' },
 ];
 
 // Substitute graph. Strength 1.0 = identical, 0.7+ = confident swap,
@@ -333,4 +547,72 @@ export const SUBSTITUTES: Substitute[] = [
   // Sugar forms
   { ingredientId: 'sugar_cube', substituteId: 'simple_syrup', strength: 0.85, notes: 'use ~7ml syrup per cube' },
   { ingredientId: 'sugar', substituteId: 'simple_syrup', strength: 0.85 },
+  { ingredientId: 'simple_syrup', substituteId: 'demerara_syrup', strength: 0.85, notes: 'richer, caramel notes' },
+  { ingredientId: 'demerara_syrup', substituteId: 'simple_syrup', strength: 0.8 },
+  { ingredientId: 'cane_syrup', substituteId: 'simple_syrup', strength: 0.9 },
+
+  // Amaro family cross-subs (lossy but usable)
+  { ingredientId: 'amaro_montenegro', substituteId: 'amaro_averna', strength: 0.65 },
+  { ingredientId: 'amaro_averna', substituteId: 'amaro_montenegro', strength: 0.65 },
+  { ingredientId: 'amaro_nonino', substituteId: 'amaro_averna', strength: 0.6 },
+
+  // Bitter aperitifs
+  { ingredientId: 'suze', substituteId: 'aperol', strength: 0.5, notes: 'very different — gentian vs. orange' },
+  { ingredientId: 'select_aperitivo', substituteId: 'aperol', strength: 0.8 },
+  { ingredientId: 'select_aperitivo', substituteId: 'campari', strength: 0.7 },
+
+  // Elderflower family
+  { ingredientId: 'st_germain', substituteId: 'elderflower_liqueur', strength: 0.95 },
+  { ingredientId: 'elderflower_liqueur', substituteId: 'st_germain', strength: 0.95 },
+
+  // Nut/stone liqueurs
+  { ingredientId: 'amaretto', substituteId: 'orgeat', strength: 0.55, notes: 'non-alcoholic swap; adjust proof' },
+  { ingredientId: 'frangelico', substituteId: 'amaretto', strength: 0.6 },
+
+  // Berry liqueur swaps
+  { ingredientId: 'chambord', substituteId: 'creme_de_cassis', strength: 0.75, notes: 'raspberry vs blackcurrant' },
+  { ingredientId: 'chambord', substituteId: 'creme_de_framboise', strength: 0.9 },
+  { ingredientId: 'creme_de_mure', substituteId: 'chambord', strength: 0.8 },
+  { ingredientId: 'creme_de_framboise', substituteId: 'chambord', strength: 0.9 },
+
+  // Violet has no good sub — omit.
+
+  // Peach
+  { ingredientId: 'creme_de_peche', substituteId: 'peach', strength: 0.5, notes: 'muddled fresh peach + simple' },
+
+  // Whiskey family (extend)
+  { ingredientId: 'japanese_whisky', substituteId: 'scotch', strength: 0.75 },
+  { ingredientId: 'scotch', substituteId: 'japanese_whisky', strength: 0.75 },
+  { ingredientId: 'irish_whiskey', substituteId: 'bourbon', strength: 0.7 },
+
+  // Brandy extensions
+  { ingredientId: 'armagnac', substituteId: 'cognac', strength: 0.9 },
+  { ingredientId: 'cognac', substituteId: 'armagnac', strength: 0.9 },
+  { ingredientId: 'calvados', substituteId: 'apple_juice', strength: 0.3, notes: 'non-alcoholic only' },
+
+  // Rum extensions
+  { ingredientId: 'rhum_agricole', substituteId: 'rum_white', strength: 0.7, notes: 'agricole has grassy funk' },
+
+  // Sherry swaps
+  { ingredientId: 'sherry_manzanilla', substituteId: 'sherry_fino', strength: 0.9 },
+  { ingredientId: 'sherry_fino', substituteId: 'sherry_manzanilla', strength: 0.9 },
+  { ingredientId: 'sherry_amontillado', substituteId: 'sherry_oloroso', strength: 0.75 },
+  { ingredientId: 'sherry_oloroso', substituteId: 'sherry_amontillado', strength: 0.75 },
+  { ingredientId: 'sherry_px', substituteId: 'sherry_oloroso', strength: 0.55, notes: 'PX much sweeter' },
+
+  // Punt e Mes / sweet vermouth
+  { ingredientId: 'punt_e_mes', substituteId: 'vermouth_sweet', strength: 0.75, notes: 'punt e mes more bitter' },
+
+  // Juice extensions
+  { ingredientId: 'grapefruit_juice', substituteId: 'sparkling_grapefruit', strength: 0.5 },
+
+  // Syrup extensions
+  { ingredientId: 'ginger_syrup', substituteId: 'ginger_beer', strength: 0.5, notes: 'adjust dilution' },
+  { ingredientId: 'cinnamon_syrup', substituteId: 'simple_syrup', strength: 0.4, notes: 'loses spice' },
+  { ingredientId: 'vanilla_syrup', substituteId: 'simple_syrup', strength: 0.5 },
+  { ingredientId: 'pineapple_syrup', substituteId: 'pineapple_juice', strength: 0.55 },
+
+  // Aromatic bitters family
+  { ingredientId: 'aromatic_bitters', substituteId: 'angostura_bitters', strength: 0.95 },
+  { ingredientId: 'angostura_bitters', substituteId: 'aromatic_bitters', strength: 0.95 },
 ];

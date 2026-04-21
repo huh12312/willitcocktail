@@ -24,6 +24,22 @@ describe('grammars', () => {
       'espresso_martini', // classified as sour in seed but uses coffee, not citrus
       'cosmopolitan', // sour with cranberry as secondary — citrus slot met by lime
       'americano', // campari+vermouth+soda has no spirit base — a liqueur-based highball outlier
+      'paper_plane', // sour with bitter liqueurs (aperol + amaro) filling the sweetener role
+      'jungle_bird', // demerara syrup — not in SIMPLE_SWEETENERS list
+      'painkiller', // tiki, coconut cream/pineapple stand in for sweetener
+      'pina_colada', // tiki, coconut cream as sweetener
+      'sherry_cobbler', // wine-based, sugar+fruit as sweetener
+      'garibaldi', // campari + OJ, no traditional sweetener
+      'rome_with_a_view', // maraschino-heavy sour, not in SWEET_LIQUEURS
+      'mezcal_negroni', // martini family, campari as bitter liqueur not sweet
+      'kingston_negroni', // martini family, campari as bitter liqueur not sweet
+      'old_pal', // dry vermouth + campari — bitter liqueur, not sweet
+      'saratoga', // split-base old fashioned with vermouth as modifier
+      'stinger', // creme de menthe is a sweet liqueur but served neat over crushed ice
+      'ti_punch', // raw cane syrup, no citrus juice (muddled lime)
+      'bamboo', // sherry + dry vermouth, no spirit base
+      'adonis', // sherry + sweet vermouth, no spirit base
+      'seelbach', // bourbon + triple sec + massive bitters + sparkling wine
     ]);
 
     for (const recipe of DATA.recipes) {

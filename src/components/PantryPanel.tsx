@@ -2,31 +2,124 @@ import { useMemo, useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
 import { PantryQuickAdd } from './PantryQuickAdd';
-import type { Ingredient, IngredientCategory } from '../types';
+import type { Ingredient } from '../types';
 
-const CATEGORY_ORDER: IngredientCategory[] = [
+type PantryGroup =
+  | 'spirit'
+  | 'liqueur'
+  | 'wine'
+  | 'mixer'
+  | 'syrup'
+  | 'bitter'
+  | 'fruit'
+  | 'vegetable'
+  | 'herb_spice'
+  | 'extra';
+
+const GROUP_ORDER: PantryGroup[] = [
   'spirit',
   'liqueur',
   'wine',
-  'juice',
+  'mixer',
   'syrup',
   'bitter',
-  'mixer',
-  'other',
-  'garnish',
+  'fruit',
+  'vegetable',
+  'herb_spice',
+  'extra',
 ];
 
-const CATEGORY_LABEL: Record<IngredientCategory, string> = {
+const GROUP_LABEL: Record<PantryGroup, string> = {
   spirit: 'Spirits',
   liqueur: 'Liqueurs',
   wine: 'Wines & Vermouths',
-  juice: 'Juices',
+  mixer: 'Mixers',
   syrup: 'Syrups',
   bitter: 'Bitters',
-  mixer: 'Mixers',
-  other: 'Pantry Extras',
-  garnish: 'Garnishes',
+  fruit: 'Fruit',
+  vegetable: 'Vegetables',
+  herb_spice: 'Herbs & Spices',
+  extra: 'Extras',
 };
+
+const EXTRA_KEYWORDS = [
+  'cream',
+  'milk',
+  'coffee',
+  'espresso',
+  'egg',
+  'sugar',
+  'water',
+  'sauce',
+  'tabasco',
+];
+const VEGETABLE_KEYWORDS = [
+  'celery',
+  'cucumber',
+  'horseradish',
+  'jalapeño',
+  'jalapeno',
+  'olive',
+  'tomato',
+];
+const HERB_SPICE_KEYWORDS = [
+  'basil',
+  'cilantro',
+  'mint',
+  'rosemary',
+  'sage',
+  'thyme',
+  'ginger',
+  'cardamom',
+  'cinnamon',
+  'nutmeg',
+  'anise',
+  'pepper',
+  'salt',
+  'clove',
+  'coriander',
+];
+const FRUIT_KEYWORDS = [
+  'apple',
+  'pear',
+  'peach',
+  'pineapple',
+  'mango',
+  'watermelon',
+  'pomegranate',
+  'passion',
+  'strawberry',
+  'raspberry',
+  'blackberry',
+  'cherry',
+  'lemon',
+  'lime',
+  'orange',
+  'grapefruit',
+  'cranberry',
+  'coconut',
+  'maraschino',
+  'berry',
+  'twist',
+];
+
+function pantryGroup(i: Ingredient): PantryGroup {
+  switch (i.category) {
+    case 'spirit':
+    case 'liqueur':
+    case 'wine':
+    case 'mixer':
+    case 'syrup':
+    case 'bitter':
+      return i.category;
+  }
+  const name = i.name.toLowerCase();
+  if (EXTRA_KEYWORDS.some((k) => name.includes(k))) return 'extra';
+  if (VEGETABLE_KEYWORDS.some((k) => name.includes(k))) return 'vegetable';
+  if (HERB_SPICE_KEYWORDS.some((k) => name.includes(k))) return 'herb_spice';
+  if (FRUIT_KEYWORDS.some((k) => name.includes(k))) return 'fruit';
+  return 'extra';
+}
 
 export function PantryPanel() {
   const data = useData();
@@ -48,10 +141,10 @@ export function PantryPanel() {
   }, [data, query, showAll, pantrySet]);
 
   const grouped = useMemo(() => {
-    const map = new Map<IngredientCategory, Ingredient[]>();
-    for (const cat of CATEGORY_ORDER) map.set(cat, []);
+    const map = new Map<PantryGroup, Ingredient[]>();
+    for (const g of GROUP_ORDER) map.set(g, []);
     for (const i of filtered) {
-      const arr = map.get(i.category);
+      const arr = map.get(pantryGroup(i));
       if (arr) arr.push(i);
     }
     return map;
@@ -95,13 +188,13 @@ export function PantryPanel() {
       </div>
 
       <div className="flex flex-col gap-5">
-        {CATEGORY_ORDER.map((cat) => {
-          const items = grouped.get(cat) ?? [];
+        {GROUP_ORDER.map((g) => {
+          const items = grouped.get(g) ?? [];
           if (items.length === 0) return null;
           return (
-            <div key={cat}>
+            <div key={g}>
               <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">
-                {CATEGORY_LABEL[cat]}
+                {GROUP_LABEL[g]}
               </h3>
               <div className="flex flex-wrap gap-2">
                 {items.map((i) => {
