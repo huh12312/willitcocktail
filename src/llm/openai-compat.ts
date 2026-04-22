@@ -550,7 +550,11 @@ function mapFinalizeIntent(
 
     if (!recipe || !id) {
       // Recipe not in DB — surface as an LLM-generated suggestion if the model gave us a name.
-      const name = String(m?.recipe_name ?? rawId ?? '').trim();
+      const rawName = String(m?.recipe_name ?? rawId ?? '').trim();
+      // Convert snake_case IDs to Title Case when no display name was provided.
+      const name = m?.recipe_name
+        ? rawName
+        : rawName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
       if (!name) continue;
       hasLlmGenerated = true;
       matches.push({

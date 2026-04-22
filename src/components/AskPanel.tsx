@@ -32,6 +32,7 @@ export function AskPanel({ onSelect }: AskPanelProps) {
   const [result, setResult] = useState<IntentSearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mentioned, setMentioned] = useState<{ id: string; name: string }[]>([]);
+  const [selectedLlmMatch, setSelectedLlmMatch] = useState<IntentSearchResult['matches'][number] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const heuristic = useMemo(() => new HeuristicProvider(), []);
 
@@ -171,7 +172,11 @@ export function AskPanel({ onSelect }: AskPanelProps) {
       )}
 
       {result && (
-        <ResultView result={result} onSelect={onSelect} />
+        <ResultView result={result} onSelect={onSelect} onSelectLlm={setSelectedLlmMatch} />
+      )}
+
+      {selectedLlmMatch && (
+        <LlmRecipeModal match={selectedLlmMatch} onClose={() => setSelectedLlmMatch(null)} />
       )}
     </div>
   );
@@ -254,9 +259,11 @@ function truncate(s: string, n: number): string {
 function ResultView({
   result,
   onSelect,
+  onSelectLlm,
 }: {
   result: IntentSearchResult;
   onSelect: (id: string) => void;
+  onSelectLlm: (match: IntentSearchResult['matches'][number]) => void;
 }) {
   const data = useData();
   return (
@@ -273,7 +280,7 @@ function ResultView({
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
           {result.matches.map((m) =>
             m.llmGenerated ? (
-              <LlmGeneratedCard key={m.recipeId} match={m} />
+              <LlmGeneratedCard key={m.recipeId} match={m} onSelect={onSelectLlm} />
             ) : (
               <button
                 key={m.recipeId}
@@ -324,9 +331,19 @@ function ResultView({
   );
 }
 
-function LlmGeneratedCard({ match }: { match: IntentSearchResult['matches'][number] }) {
+function LlmGeneratedCard({
+  match,
+  onSelect,
+}: {
+  match: IntentSearchResult['matches'][number];
+  onSelect: (match: IntentSearchResult['matches'][number]) => void;
+}) {
   return (
-    <div className="rounded-lg border border-sky-700/40 bg-sky-950/20 p-4">
+    <button
+      type="button"
+      onClick={() => onSelect(match)}
+      className="text-left rounded-lg border border-sky-700/40 bg-sky-950/20 p-4 hover:border-sky-500 hover:bg-sky-950/40 transition"
+    >
       <div className="flex items-start justify-between gap-2 mb-1">
         <h3 className="font-semibold text-amber-100">{match.recipeName}</h3>
         <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-sky-500/15 text-sky-300 border-sky-500/40">
@@ -335,9 +352,57 @@ function LlmGeneratedCard({ match }: { match: IntentSearchResult['matches'][numb
       </div>
       <div className="text-xs text-amber-300/80 mb-2">{match.fitReason}</div>
       {match.llmDescription && (
-        <p className="text-xs text-amber-200/70 italic leading-relaxed">{match.llmDescription}</p>
+        <p className="text-xs text-amber-200/70 italic leading-relaxed line-clamp-2">{match.llmDescription}</p>
       )}
-      <p className="mt-2 text-[10px] text-sky-400/60">Not in our database — verify ingredients before mixing.</p>
+    </button>
+  );
+}
+
+function LlmRecipeModal({
+  match,
+  onClose,
+}: {
+  match: IntentSearchResult['matches'][number];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-sky-700/50 bg-amber-950 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-amber-100">{match.recipeName}</h2>
+            <span className="text-[10px] uppercase tracking-wider text-sky-300">AI suggestion · not in database</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-amber-400/60 hover:text-amber-200 transition text-lg leading-none"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {match.fitReason && (
+          <p className="text-sm text-amber-300/80 mb-4">{match.fitReason}</p>
+        )}
+
+        {match.llmDescription && (
+          <p className="text-sm text-amber-200/80 italic leading-relaxed mb-4 border-t border-amber-800/40 pt-4">
+            {match.llmDescription}
+          </p>
+        )}
+
+        <p className="text-xs text-sky-400/70 border-t border-amber-800/40 pt-4">
+          This recipe was suggested by the AI and isn't in our verified database. Ingredients and proportions are approximate — look it up before mixing.
+        </p>
+      </div>
     </div>
   );
 }
