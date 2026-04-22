@@ -1,40 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../data/source';
-import type { DataIndex } from '../data';
 import { usePantry } from '../store/pantry';
 import { matchRecipes, groupByTier } from '../matcher';
-import type { Ingredient, MatchResult, Recipe } from '../types';
+import { keyLiquor, liquorCounts } from '../data/recipe-utils';
+import type { MatchResult } from '../types';
 
 interface MatchesPanelProps {
   onSelect: (id: string) => void;
-}
-
-// Walks up the parent chain to find the top-level spirit category
-// (e.g. bourbon → whiskey). Returns null if the ingredient isn't a spirit.
-function rootSpirit(ingredient: Ingredient, data: DataIndex): Ingredient | null {
-  if (ingredient.category !== 'spirit') return null;
-  let cursor: Ingredient | undefined = ingredient;
-  while (cursor?.parentId) {
-    const parent = data.ingredientById.get(cursor.parentId);
-    if (!parent || parent.category !== 'spirit') break;
-    cursor = parent;
-  }
-  return cursor ?? null;
-}
-
-// The spirit with the largest amountMl, resolved to its root. Falls back to
-// the first spirit-category ingredient when amounts aren't parsed.
-function keyLiquor(recipe: Recipe, data: DataIndex): Ingredient | null {
-  let best: { root: Ingredient; ml: number } | null = null;
-  for (const ri of recipe.ingredients) {
-    const ing = data.ingredientById.get(ri.ingredientId);
-    if (!ing) continue;
-    const root = rootSpirit(ing, data);
-    if (!root) continue;
-    const ml = ri.amountMl ?? 0;
-    if (!best || ml > best.ml) best = { root, ml };
-  }
-  return best?.root ?? null;
 }
 
 export function MatchesPanel({ onSelect }: MatchesPanelProps) {
@@ -57,18 +29,10 @@ export function MatchesPanel({ onSelect }: MatchesPanelProps) {
     [data, ingredients, strictMode, classicsOnly, minStrength],
   );
 
-  // (keyLiquor id, count) across the current result set, sorted desc.
-  const liquorCounts = useMemo(() => {
-    const counts = new Map<string, { ingredient: Ingredient; count: number }>();
-    for (const r of results) {
-      const liq = keyLiquor(r.recipe, data);
-      if (!liq) continue;
-      const entry = counts.get(liq.id);
-      if (entry) entry.count += 1;
-      else counts.set(liq.id, { ingredient: liq, count: 1 });
-    }
-    return Array.from(counts.values()).sort((a, b) => b.count - a.count);
-  }, [results, data]);
+  const liqCounts = useMemo(
+    () => liquorCounts(results.map((r) => r.recipe), data),
+    [results, data],
+  );
 
   const filteredResults = useMemo(() => {
     if (!liquorFilter) return results;
@@ -108,7 +72,7 @@ export function MatchesPanel({ onSelect }: MatchesPanelProps) {
         </div>
       </div>
 
-      {liquorCounts.length > 0 && (
+      {liqCounts.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -122,7 +86,7 @@ export function MatchesPanel({ onSelect }: MatchesPanelProps) {
           >
             All · {results.length}
           </button>
-          {liquorCounts.map(({ ingredient, count }) => (
+          {liqCounts.map(({ ingredient, count }) => (
             <button
               key={ingredient.id}
               type="button"

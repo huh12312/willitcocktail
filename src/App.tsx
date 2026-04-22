@@ -3,13 +3,14 @@ import { PantryPanel } from './components/PantryPanel';
 import { MatchesPanel } from './components/MatchesPanel';
 import { AskPanel } from './components/AskPanel';
 import { CreatePanel } from './components/CreatePanel';
+import { RecipesPanel } from './components/RecipesPanel';
 import { RecipeModal } from './components/RecipeModal';
 import { LlmSettings } from './components/LlmSettings';
 import { DataProvider } from './data/DataProvider';
 import { usePantry } from './store/pantry';
 import { activeProviderId } from './llm';
 
-type Tab = 'matches' | 'pantry' | 'ask' | 'create';
+type Tab = 'matches' | 'pantry' | 'ask' | 'create' | 'recipes';
 
 export default function App() {
   return (
@@ -65,6 +66,9 @@ function AppShell() {
         <TabButton active={tab === 'create'} onClick={() => setTab('create')}>
           Create
         </TabButton>
+        <TabButton active={tab === 'recipes'} onClick={() => setTab('recipes')}>
+          Recipes
+        </TabButton>
       </nav>
 
       <main>
@@ -72,6 +76,7 @@ function AppShell() {
         {tab === 'matches' && <MatchesPanel onSelect={setSelectedRecipe} />}
         {tab === 'ask' && <AskPanel onSelect={setSelectedRecipe} />}
         {tab === 'create' && <CreatePanel onSelect={setSelectedRecipe} />}
+        {tab === 'recipes' && <RecipesPanel onSelect={setSelectedRecipe} />}
       </main>
 
       <RecipeModal recipeId={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
