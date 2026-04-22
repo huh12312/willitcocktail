@@ -2986,6 +2986,36 @@
       ]
     },
     {
+      "id": "sea_breeze",
+      "name": "Sea Breeze",
+      "family": "highball",
+      "method": "build",
+      "glass": "highball",
+      "garnish": "Lime wedge",
+      "instructions": "Build in an ice-filled highball glass. Pour vodka, then grapefruit juice, then top with cranberry juice. Garnish with a lime wedge.",
+      "source": "cocktailfyi",
+      "ingredients": [
+        {
+          "ingredientId": "vodka",
+          "amountMl": 45,
+          "amountDisplay": "1.5 oz",
+          "position": 1
+        },
+        {
+          "ingredientId": "cranberry_juice",
+          "amountMl": 90,
+          "amountDisplay": "3 oz",
+          "position": 2
+        },
+        {
+          "ingredientId": "grapefruit_juice",
+          "amountMl": 30,
+          "amountDisplay": "1 oz",
+          "position": 3
+        }
+      ]
+    },
+    {
       "id": "dark_stormy",
       "name": "Dark 'n Stormy",
       "family": "highball",
@@ -145508,5 +145538,5 @@
       ]
     }
   ],
-  "exportedAt": "2026-04-21T23:30:03.051Z"
+  "exportedAt": "2026-04-22T00:50:25.250Z"
 }

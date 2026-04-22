@@ -271,51 +271,73 @@ function ResultView({
         </div>
       ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-          {result.matches.map((m) => (
-            <button
-              key={m.recipeId}
-              type="button"
-              onClick={() => onSelect(m.recipeId)}
-              className="text-left rounded-lg border border-amber-700/40 bg-amber-900/20 p-4 hover:border-amber-500 hover:bg-amber-900/40 transition"
-            >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <h3 className="font-semibold text-amber-100">{m.recipeName}</h3>
-                <MakeabilityBadge makeability={m.makeability} />
-              </div>
-              <div className="text-xs text-amber-300/80 mb-2">{m.fitReason}</div>
-              {m.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {m.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="text-[10px] uppercase tracking-wider rounded bg-amber-900/40 border border-amber-700/40 text-amber-300/80 px-1.5 py-0.5"
-                    >
-                      {t.replace('_', ' ')}
-                    </span>
-                  ))}
+          {result.matches.map((m) =>
+            m.llmGenerated ? (
+              <LlmGeneratedCard key={m.recipeId} match={m} />
+            ) : (
+              <button
+                key={m.recipeId}
+                type="button"
+                onClick={() => onSelect(m.recipeId)}
+                className="text-left rounded-lg border border-amber-700/40 bg-amber-900/20 p-4 hover:border-amber-500 hover:bg-amber-900/40 transition"
+              >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <h3 className="font-semibold text-amber-100">{m.recipeName}</h3>
+                  <MakeabilityBadge makeability={m.makeability} />
                 </div>
-              )}
-              {m.makeability === 'with_substitute' && m.substitutions.length > 0 && (
-                <div className="text-xs text-amber-300/90 mt-1 space-y-0.5">
-                  {m.substitutions.map((s, i) => (
-                    <div key={i}>
-                      <span className="opacity-60">Use</span>{' '}
-                      <span className="font-medium">{data.ingredientById.get(s.use)?.name}</span>{' '}
-                      <span className="opacity-60">for</span>{' '}
-                      <span className="font-medium">{data.ingredientById.get(s.original)?.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {(m.makeability === 'missing_one' || m.makeability === 'cannot_make') && m.missing.length > 0 && (
-                <div className="text-xs text-rose-300/90 mt-1">
-                  Need: {m.missing.map((id) => data.ingredientById.get(id)?.name ?? id).join(', ')}
-                </div>
-              )}
-            </button>
-          ))}
+                <div className="text-xs text-amber-300/80 mb-2">{m.fitReason}</div>
+                {m.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {m.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="text-[10px] uppercase tracking-wider rounded bg-amber-900/40 border border-amber-700/40 text-amber-300/80 px-1.5 py-0.5"
+                      >
+                        {t.replace('_', ' ')}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {m.makeability === 'with_substitute' && m.substitutions.length > 0 && (
+                  <div className="text-xs text-amber-300/90 mt-1 space-y-0.5">
+                    {m.substitutions.map((s, i) => (
+                      <div key={i}>
+                        <span className="opacity-60">Use</span>{' '}
+                        <span className="font-medium">{data.ingredientById.get(s.use)?.name}</span>{' '}
+                        <span className="opacity-60">for</span>{' '}
+                        <span className="font-medium">{data.ingredientById.get(s.original)?.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(m.makeability === 'missing_one' || m.makeability === 'cannot_make') && m.missing.length > 0 && (
+                  <div className="text-xs text-rose-300/90 mt-1">
+                    Need: {m.missing.map((id) => data.ingredientById.get(id)?.name ?? id).join(', ')}
+                  </div>
+                )}
+              </button>
+            ),
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function LlmGeneratedCard({ match }: { match: IntentSearchResult['matches'][number] }) {
+  return (
+    <div className="rounded-lg border border-sky-700/40 bg-sky-950/20 p-4">
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <h3 className="font-semibold text-amber-100">{match.recipeName}</h3>
+        <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-sky-500/15 text-sky-300 border-sky-500/40">
+          AI suggestion
+        </span>
+      </div>
+      <div className="text-xs text-amber-300/80 mb-2">{match.fitReason}</div>
+      {match.llmDescription && (
+        <p className="text-xs text-amber-200/70 italic leading-relaxed">{match.llmDescription}</p>
+      )}
+      <p className="mt-2 text-[10px] text-sky-400/60">Not in our database — verify ingredients before mixing.</p>
     </div>
   );
 }

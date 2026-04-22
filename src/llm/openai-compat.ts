@@ -153,6 +153,8 @@ const TOOL_FUNCTIONS = [
               properties: {
                 recipe_id: { type: 'string' },
                 fit_reason: { type: 'string', description: 'One short phrase explaining why this fits.' },
+                recipe_name: { type: 'string', description: 'Human-readable name — required when recipe_id is not in the database.' },
+                description: { type: 'string', description: 'One-sentence description of the drink — required when recipe_id is not in the database.' },
               },
               required: ['recipe_id', 'fit_reason'],
             },
@@ -467,7 +469,7 @@ function buildIntentSystem(data: DataIndex, pantryIds: string[]): string {
     '1) Call search_recipes at least once (by flavor_tags, family, or ingredients) to get candidate recipes.',
     '2) Optionally call get_recipe on the top candidates.',
     '3) Call finalize_intent with 3-5 ranked matches.',
-    'CRITICAL: recipe_id values in finalize_intent MUST be copied exactly from search_recipes results — they are snake_case ids like "negroni", "dry_martini", "old_fashioned". Never invent ids or use display names like "Negroni".',
+    'Prefer recipe_id values copied exactly from search_recipes results (snake_case like "negroni"). If no DB result fits well, you may suggest an unlisted recipe by setting recipe_id to a snake_case slug, recipe_name to the display name, and description to a one-sentence summary — the app will flag it as AI-generated.',
     'Prefer cocktails the user can make now, but also suggest close misses (one substitution or one missing ingredient). Do not return an empty matches array.',
     'Keep interpretations and fit_reason short (≤ 12 words).',
   ].join(' ');
@@ -539,51 +541,62 @@ function mapFinalizeIntent(
   const matchByRecipe = new Map(deterministicMatches.map((m) => [m.recipe.id, m]));
 
   const rawMatches = args.matches ?? [];
-  const unmatchedIds: string[] = [];
-  const matches: IntentMatch[] = rawMatches
-    .map((m) => {
-      const rawId = m?.recipe_id;
-      const id = resolveRecipeId(rawId, data);
-      const recipe = id ? data.recipes.find((r) => r.id === id) : null;
-      if (!recipe || !id) {
-        if (rawId != null) unmatchedIds.push(String(rawId));
-        return null;
-      }
-      const det = matchByRecipe.get(id);
-      let makeability: IntentMatch['makeability'] = 'cannot_make';
-      let substitutions: IntentMatch['substitutions'] = [];
-      let missing: string[] = [];
-      if (det) {
-        if (det.tier === 'exact') makeability = 'now';
-        else if (det.tier === 'near') makeability = 'with_substitute';
-        else if (det.tier === 'almost') makeability = 'missing_one';
-        substitutions = det.substitutions.map((s) => ({ original: s.originalId, use: s.useId }));
-        missing = det.missing;
-      } else {
-        const needed = recipe.ingredients.filter((ri) => !ri.optional).map((ri) => ri.ingredientId);
-        const { missing: miss } = check_pantry(needed, pantryIds, data);
-        missing = miss;
-      }
-      return {
-        recipeId: id,
-        recipeName: recipe.name,
+  let hasLlmGenerated = false;
+  const matches: IntentMatch[] = [];
+  for (const m of rawMatches) {
+    const rawId = m?.recipe_id;
+    const id = resolveRecipeId(rawId, data);
+    const recipe = id ? data.recipes.find((r) => r.id === id) : null;
+
+    if (!recipe || !id) {
+      // Recipe not in DB — surface as an LLM-generated suggestion if the model gave us a name.
+      const name = String(m?.recipe_name ?? rawId ?? '').trim();
+      if (!name) continue;
+      hasLlmGenerated = true;
+      matches.push({
+        recipeId: String(rawId ?? name),
+        recipeName: name,
         fitReason: String(m?.fit_reason ?? ''),
-        makeability,
-        substitutions,
-        missing,
-        tags: (RECIPE_TAGS[id] ?? []) as FlavorTag[],
-      };
-    })
-    .filter((x): x is IntentMatch => x !== null);
+        makeability: 'cannot_make',
+        substitutions: [],
+        missing: [],
+        tags: [],
+        llmGenerated: true,
+        llmDescription: m?.description ? String(m.description) : undefined,
+      });
+      continue;
+    }
+
+    const det = matchByRecipe.get(id);
+    let makeability: IntentMatch['makeability'] = 'cannot_make';
+    let substitutions: IntentMatch['substitutions'] = [];
+    let missing: string[] = [];
+    if (det) {
+      if (det.tier === 'exact') makeability = 'now';
+      else if (det.tier === 'near') makeability = 'with_substitute';
+      else if (det.tier === 'almost') makeability = 'missing_one';
+      substitutions = det.substitutions.map((s) => ({ original: s.originalId, use: s.useId }));
+      missing = det.missing;
+    } else {
+      const needed = recipe.ingredients.filter((ri) => !ri.optional).map((ri) => ri.ingredientId);
+      const { missing: miss } = check_pantry(needed, pantryIds, data);
+      missing = miss;
+    }
+    matches.push({
+      recipeId: id,
+      recipeName: recipe.name,
+      fitReason: String(m?.fit_reason ?? ''),
+      makeability,
+      substitutions,
+      missing,
+      tags: (RECIPE_TAGS[id] ?? []) as FlavorTag[],
+    });
+  }
 
   const noteParts: string[] = [];
   if (args.notes) noteParts.push(String(args.notes));
-  if (unmatchedIds.length > 0) {
-    noteParts.push(`Dropped unknown recipe ids: ${unmatchedIds.join(', ')}`);
-  }
-  if (rawMatches.length > 0 && matches.length === 0) {
-    // Everything the model returned was unresolvable — fall back to a helpful signal.
-    noteParts.push('The model suggested recipes not in our database. Try rephrasing, or switch to the heuristic provider.');
+  if (hasLlmGenerated) {
+    noteParts.push('Some suggestions below are AI-generated and not in our recipe database — treat ingredients and quantities as a starting point.');
   }
 
   return {

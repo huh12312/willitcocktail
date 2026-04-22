@@ -10,6 +10,7 @@ export const RECIPE_DESCRIPTIONS: Record<string, string> = {
   sidecar: 'A pre-Prohibition Parisian sour of cognac, Cointreau, and lemon — equal parts bright and boozy.',
   gimlet: 'Royal Navy rations in a glass: gin cut with lime cordial to ward off scurvy on long voyages.',
   cosmopolitan: 'The vodka sour that defined the 90s, glossed pink by cranberry and sharpened with a flamed orange peel.',
+  sea_breeze: 'A poolside three-ingredient highball — vodka, cranberry, and grapefruit juice — that hit its peak in the 1980s Cancún era.',
   kamikaze: 'A vodka-triple-sec-lime slammer from the mid-century bar scene, served up and dispatched quickly.',
   caipirinha: "Brazil's national cocktail: muddled lime and sugar drowned in funky cachaça, served on crushed ice.",
   gin_tonic: "Colonial anti-malarial turned global highball — botanical gin lengthened with quinine tonic and a lime wedge.",

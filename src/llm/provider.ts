@@ -27,6 +27,10 @@ export interface IntentMatch {
   substitutions: { original: string; use: string }[];
   missing: string[];
   tags: FlavorTag[];
+  /** True when the recipe doesn't exist in the local DB — details came from the LLM. */
+  llmGenerated?: boolean;
+  /** Brief description provided by the LLM for llmGenerated recipes. */
+  llmDescription?: string;
 }
 
 export interface IntentSearchResult {
