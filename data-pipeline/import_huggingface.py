@@ -56,6 +56,16 @@ def _to_float(num: str) -> float | None:
         return None
 
 
+def _oz_display(ml: float) -> str:
+    """Format a ml value as a rounded oz string (nearest 0.25 oz)."""
+    oz = ml / 29.5735
+    rounded = round(oz * 4) / 4
+    if rounded == int(rounded):
+        return f"{int(rounded)} oz"
+    # Strip trailing zeros: 1.50 → 1.5, 0.25 → 0.25
+    return f"{rounded:.2f}".rstrip("0").rstrip(".") + " oz"
+
+
 def parse_qty(raw: str) -> tuple[float | None, str]:
     """Return (amount_ml, amount_display). ml may be None for non-volume units."""
     if not raw:
@@ -70,9 +80,10 @@ def parse_qty(raw: str) -> tuple[float | None, str]:
         return None, display
     unit = (unit or "").lower()
     if unit in ("cl",):
-        return value * 10.0, display
+        ml = value * 10.0
+        return ml, _oz_display(ml)
     if unit in ("ml",):
-        return value, display
+        return value, _oz_display(value)
     if unit in ("oz", "ounce", "ounces"):
         return value * 29.5735, display
     if unit in ("tsp", "teaspoon", "teaspoons", "bsp", "barspoon", "barspoons"):
