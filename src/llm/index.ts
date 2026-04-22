@@ -4,7 +4,7 @@ import { OpenAiCompatProvider } from './openai-compat';
 import type { LlmProvider } from './provider';
 import { useLlmSettings, isCloudConfigured, type ProviderChoice } from './settings';
 
-export type { LlmProvider, ParsedPantry, IntentMatch, IntentSearchResult } from './provider';
+export type { LlmProvider, ParsedPantry, IntentMatch, IntentSearchResult, LlmRecipeDetails } from './provider';
 export { HeuristicProvider } from './heuristic';
 export { LitertLmProvider } from './litert-lm';
 export { OpenAiCompatProvider } from './openai-compat';

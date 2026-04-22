@@ -39,6 +39,13 @@ export interface IntentSearchResult {
   notes?: string;
 }
 
+export interface LlmRecipeDetails {
+  ingredients: { name: string; amount: string }[];
+  instructions: string;
+  garnish?: string;
+  glass?: string;
+}
+
 export interface LlmProvider {
   readonly id: string; // "heuristic" | "litert-lm" | "gemini-flash"
   readonly label: string; // human-readable
@@ -51,6 +58,8 @@ export interface LlmProvider {
     data: DataIndex,
   ): Promise<IntentSearchResult>;
   proposeRecipe?(candidate: Recipe, data: DataIndex): Promise<RecipePolish>;
+  /** Fetch full recipe details for a named cocktail not in the local DB. */
+  getLlmRecipeDetails?(name: string): Promise<LlmRecipeDetails | null>;
 }
 
 // Flavor tags keyed by common English vocabulary (used by heuristic)

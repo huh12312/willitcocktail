@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
 import { activeProviderId, getLlmProvider, HeuristicProvider } from '../llm';
-import type { IntentSearchResult } from '../llm';
+import type { IntentSearchResult, LlmRecipeDetails } from '../llm';
 
 interface AskPanelProps {
   onSelect: (id: string) => void;
@@ -365,13 +365,30 @@ function LlmRecipeModal({
   match: IntentSearchResult['matches'][number];
   onClose: () => void;
 }) {
+  const [details, setDetails] = useState<LlmRecipeDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getLlmProvider().then(async (provider) => {
+      if (!provider.getLlmRecipeDetails) { setLoading(false); return; }
+      try {
+        const d = await provider.getLlmRecipeDetails(match.recipeName);
+        if (!cancelled) setDetails(d);
+      } catch { /* silent */ } finally {
+        if (!cancelled) setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [match.recipeName]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-sky-700/50 bg-amber-950 p-6 shadow-2xl"
+        className="w-full max-w-md rounded-xl border border-sky-700/50 bg-amber-950 p-6 shadow-2xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -382,25 +399,53 @@ function LlmRecipeModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-amber-400/60 hover:text-amber-200 transition text-lg leading-none"
+            className="text-amber-400/60 hover:text-amber-200 transition text-lg leading-none shrink-0"
             aria-label="Close"
           >
             ✕
           </button>
         </div>
 
-        {match.fitReason && (
-          <p className="text-sm text-amber-300/80 mb-4">{match.fitReason}</p>
+        {loading && (
+          <p className="text-sm text-amber-400/60 animate-pulse mb-4">Fetching recipe…</p>
         )}
 
-        {match.llmDescription && (
-          <p className="text-sm text-amber-200/80 italic leading-relaxed mb-4 border-t border-amber-800/40 pt-4">
-            {match.llmDescription}
-          </p>
+        {!loading && details && (
+          <>
+            {(details.glass || details.garnish) && (
+              <div className="flex gap-4 text-xs text-amber-400/70 mb-4 capitalize">
+                {details.glass && <span>Glass: {details.glass}</span>}
+                {details.garnish && <span>Garnish: {details.garnish}</span>}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">Ingredients</h3>
+              <ul className="space-y-1">
+                {details.ingredients.map((ing, i) => (
+                  <li key={i} className="flex justify-between text-sm text-amber-100">
+                    <span>{ing.name}</span>
+                    <span className="text-amber-400/70 ml-4 shrink-0">{ing.amount}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {details.instructions && (
+              <div className="mb-4">
+                <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">Instructions</h3>
+                <p className="text-sm text-amber-100/90 leading-relaxed">{details.instructions}</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {!loading && !details && match.llmDescription && (
+          <p className="text-sm text-amber-200/80 italic leading-relaxed mb-4">{match.llmDescription}</p>
         )}
 
         <p className="text-xs text-sky-400/70 border-t border-amber-800/40 pt-4">
-          This recipe was suggested by the AI and isn't in our verified database. Ingredients and proportions are approximate — look it up before mixing.
+          AI-generated — ingredients and proportions are approximate. Verify before mixing.
         </p>
       </div>
     </div>

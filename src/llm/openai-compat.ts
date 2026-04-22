@@ -5,6 +5,7 @@ import type {
   IntentMatch,
   IntentSearchResult,
   LlmProvider,
+  LlmRecipeDetails,
   ParsedPantry,
   RecipePolish,
 } from './provider';
@@ -227,6 +228,35 @@ export class OpenAiCompatProvider implements LlmProvider {
       instructions: sanitiseString(raw.instructions, candidate.instructions, 400),
       reasoning: sanitiseString(raw.reasoning, '', 300),
     };
+  }
+
+  async getLlmRecipeDetails(name: string): Promise<LlmRecipeDetails | null> {
+    const system = [
+      'You are a cocktail expert. Return a JSON recipe for the requested drink.',
+      'Keys: ingredients (array of {name: string, amount: string}), instructions (2-3 sentences), garnish (short phrase or null), glass (glass type).',
+      'Use standard bartender amounts (oz or dashes). Return ONLY the JSON object, no preamble.',
+    ].join(' ');
+    try {
+      const raw = await this.completeJson([
+        { role: 'system', content: system },
+        { role: 'user', content: `Recipe for: ${name}` },
+      ]);
+      const ings = Array.isArray(raw.ingredients)
+        ? (raw.ingredients as unknown[])
+            .filter((i): i is { name: unknown; amount: unknown } => typeof i === 'object' && i !== null)
+            .map((i) => ({ name: String(i.name ?? ''), amount: String(i.amount ?? '') }))
+            .filter((i) => i.name)
+        : [];
+      if (ings.length === 0) return null;
+      return {
+        ingredients: ings,
+        instructions: sanitiseString(raw.instructions, '', 600),
+        garnish: raw.garnish ? sanitiseString(raw.garnish, '', 80) : undefined,
+        glass: raw.glass ? sanitiseString(raw.glass, '', 60) : undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private async completeJson(messages: ChatMessage[]): Promise<Record<string, unknown>> {
