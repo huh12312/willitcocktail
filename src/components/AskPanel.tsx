@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
-import { activeProviderId, getLlmProvider, HeuristicProvider } from '../llm';
+import { getLlmProvider, HeuristicProvider } from '../llm';
 import type { IntentSearchResult, LlmRecipeDetails } from '../llm';
 
 interface AskPanelProps {
@@ -15,20 +15,12 @@ const EXAMPLES = [
   'Tropical rum drink',
 ];
 
-interface ToolEvent {
-  name: string;
-  args: string;
-  at: number;
-}
-
 export function AskPanel({ onSelect }: AskPanelProps) {
   const data = useData();
   const pantryIds = usePantry((s) => s.ingredients);
   const addToPantry = usePantry((s) => s.add);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [streaming, setStreaming] = useState('');
-  const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
   const [result, setResult] = useState<IntentSearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mentioned, setMentioned] = useState<{ id: string; name: string }[]>([]);
@@ -45,8 +37,6 @@ export function AskPanel({ onSelect }: AskPanelProps) {
 
     setLoading(true);
     setError(null);
-    setStreaming('');
-    setToolEvents([]);
     setResult(null);
     setMentioned([]);
 
@@ -64,12 +54,7 @@ export function AskPanel({ onSelect }: AskPanelProps) {
         new Set([...pantryIds, ...newMentions.map((m) => m.id)]),
       );
 
-      const provider = await getLlmProvider({
-        onToken: (tok) => setStreaming((s) => s + tok),
-        onToolCall: (name, args) =>
-          setToolEvents((prev) => [...prev, { name, args, at: Date.now() }]),
-        signal: ctrl.signal,
-      });
+      const provider = await getLlmProvider({ signal: ctrl.signal });
       const res = await provider.searchIntent(trimmed, expandedPantry, data);
       if (!ctrl.signal.aborted) setResult(res);
     } catch (err) {
@@ -86,8 +71,6 @@ export function AskPanel({ onSelect }: AskPanelProps) {
     setLoading(false);
   }
 
-  const provider = activeProviderId();
-
   return (
     <div className="flex flex-col gap-5">
       <form
@@ -97,11 +80,8 @@ export function AskPanel({ onSelect }: AskPanelProps) {
         }}
         className="flex flex-col gap-2"
       >
-        <label className="text-sm text-amber-300/80 flex items-center justify-between" htmlFor="ask-input">
-          <span>What are you in the mood for?</span>
-          <span className="text-[10px] uppercase tracking-wider text-amber-400/60">
-            via {provider}
-          </span>
+        <label className="text-sm text-amber-300/80" htmlFor="ask-input">
+          What are you in the mood for?
         </label>
         <div className="flex gap-2">
           <input
@@ -159,10 +139,6 @@ export function AskPanel({ onSelect }: AskPanelProps) {
             setMentioned([]);
           }}
         />
-      )}
-
-      {(loading || toolEvents.length > 0 || streaming) && provider === 'cloud' && (
-        <StreamingTrace loading={loading} toolEvents={toolEvents} streaming={streaming} />
       )}
 
       {error && (
@@ -224,37 +200,6 @@ function MentionedIngredients({
   );
 }
 
-function StreamingTrace({
-  loading,
-  toolEvents,
-  streaming,
-}: {
-  loading: boolean;
-  toolEvents: ToolEvent[];
-  streaming: string;
-}) {
-  return (
-    <div className="rounded-md border border-amber-700/30 bg-amber-950/40 p-3 text-xs text-amber-200/80 space-y-2">
-      <div className="flex items-center gap-2 text-amber-300/90">
-        <span className={loading ? 'animate-pulse' : ''}>●</span>
-        <span className="uppercase tracking-wider">{loading ? 'Thinking' : 'Done'}</span>
-      </div>
-      {toolEvents.map((e, i) => (
-        <div key={i} className="font-mono text-[11px] opacity-80">
-          → {e.name}({truncate(e.args, 80)})
-        </div>
-      ))}
-      {streaming && (
-        <div className="whitespace-pre-wrap font-mono text-[11px] opacity-70">{streaming}</div>
-      )}
-    </div>
-  );
-}
-
-function truncate(s: string, n: number): string {
-  if (s.length <= n) return s;
-  return s.slice(0, n) + '…';
-}
 
 function ResultView({
   result,
