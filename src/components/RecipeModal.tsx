@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
 import type { DataIndex } from '../data';
+import { describeRecipe } from '../data/recipe_descriptions';
 
 interface RecipeModalProps {
   recipeId: string | null;
@@ -143,6 +144,10 @@ export function RecipeModal({ recipeId, onClose }: RecipeModalProps) {
               <p className="text-sm text-amber-100/90">{recipe.garnish}</p>
             </>
           )}
+
+          <p className="mt-6 pt-4 border-t border-amber-800/40 text-sm text-amber-200/80 italic leading-relaxed">
+            {describeRecipe(recipe, data)}
+          </p>
         </div>
       </div>
     </div>
