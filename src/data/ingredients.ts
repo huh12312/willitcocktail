@@ -38,6 +38,7 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'rhum_agricole', name: 'Rhum Agricole', category: 'spirit', parentId: 'rum' },
   { id: 'aquavit', name: 'Aquavit', category: 'spirit' },
   { id: 'genever', name: 'Genever', category: 'spirit' },
+  { id: 'everclear', name: 'Everclear', category: 'spirit' },
 
   // --- LIQUEURS & FORTIFIED WINES ---
   { id: 'vermouth_dry', name: 'Dry Vermouth', category: 'wine' },
@@ -99,12 +100,15 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'lychee_liqueur', name: 'Lychee Liqueur', category: 'liqueur' },
   { id: 'becherovka', name: 'Becherovka', category: 'liqueur' },
   { id: 'anisette', name: 'Anisette', category: 'liqueur' },
+  { id: 'anis', name: 'Anis', category: 'liqueur' },
+  { id: 'passoa', name: 'Passoã', category: 'liqueur' },
   { id: 'parfait_amour', name: 'Parfait Amour', category: 'liqueur' },
   { id: 'pisang_ambon', name: 'Pisang Ambon', category: 'liqueur' },
   { id: 'dubonnet_rouge', name: 'Dubonnet Rouge', category: 'wine' },
   { id: 'maple_syrup', name: 'Maple Syrup', category: 'syrup' },
 
   // --- WINES ---
+  { id: 'wine', name: 'Wine', category: 'wine' },
   { id: 'prosecco', name: 'Prosecco', category: 'wine' },
   { id: 'champagne', name: 'Champagne', category: 'wine' },
   { id: 'sparkling_wine', name: 'Sparkling Wine', category: 'wine' },
@@ -200,6 +204,8 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'pear', name: 'Pear', category: 'other' },
   { id: 'pomegranate', name: 'Pomegranate', category: 'other' },
   { id: 'watermelon', name: 'Watermelon', category: 'other' },
+  { id: 'kiwi', name: 'Kiwi', category: 'other' },
+  { id: 'mango', name: 'Mango', category: 'other' },
 
   // Spices
   { id: 'cinnamon_stick', name: 'Cinnamon Stick', category: 'other' },
@@ -207,6 +213,8 @@ export const INGREDIENTS: Ingredient[] = [
   { id: 'black_pepper', name: 'Black Pepper', category: 'other' },
   { id: 'star_anise', name: 'Star Anise', category: 'other' },
   { id: 'cardamom', name: 'Cardamom', category: 'other' },
+  { id: 'cloves', name: 'Cloves', category: 'other' },
+  { id: 'vanilla_extract', name: 'Vanilla Extract', category: 'other' },
 
   // Coffee
   { id: 'espresso', name: 'Espresso', category: 'other' },
@@ -585,6 +593,77 @@ export const INGREDIENT_ALIASES: IngredientAlias[] = [
   { alias: 'vanilla bitters', ingredientId: 'aromatic_bitters' },
   { alias: 'abbotts bitters', ingredientId: 'aromatic_bitters' },
   { alias: 'vermouth amaro', ingredientId: 'vermouth_sweet' },
+
+  // ── CocktailDB: new ingredient variations ────────────────────────────────
+  { alias: 'vanilla', ingredientId: 'vanilla_extract' },
+  { alias: 'vanilla flavoring', ingredientId: 'vanilla_extract' },
+  { alias: 'clove', ingredientId: 'cloves' },
+  { alias: 'whole cloves', ingredientId: 'cloves' },
+  { alias: 'anise', ingredientId: 'anis' },
+  { alias: 'orange spiral', ingredientId: 'orange_twist' },
+  { alias: 'vermouth', ingredientId: 'vermouth_dry' },
+  { alias: 'surge', ingredientId: 'lemon_lime_soda' },
+  { alias: 'zima', ingredientId: 'lemon_lime_soda' },
+  { alias: 'bacardi limon', ingredientId: 'rum_white' },
+
+  // ── CocktailDB: brand → parent spirit ────────────────────────────────────
+  { alias: 'absolut citron', ingredientId: 'vodka' },
+  { alias: 'absolut vodka', ingredientId: 'vodka' },
+  { alias: 'jack daniels', ingredientId: 'bourbon' },
+  { alias: 'jim beam', ingredientId: 'bourbon' },
+  { alias: 'johnnie walker', ingredientId: 'scotch' },
+  { alias: 'grain alcohol', ingredientId: 'vodka' },
+
+  // ── CocktailDB: pre-made mixes ────────────────────────────────────────────
+  { alias: 'sour mix', ingredientId: 'lemon_juice' },
+  { alias: 'sweet and sour', ingredientId: 'lemon_juice' },
+  { alias: 'sweet and sour mix', ingredientId: 'lemon_juice' },
+
+  // ── CocktailDB: generic bitters ───────────────────────────────────────────
+  { alias: 'bitters', ingredientId: 'angostura_bitters' },
+
+  // ── CocktailDB: fruit spirits & eau-de-vie ────────────────────────────────
+  { alias: 'applejack', ingredientId: 'calvados' },
+  { alias: 'kirschwasser', ingredientId: 'maraschino' },
+  { alias: 'kirsch', ingredientId: 'maraschino' },
+  { alias: 'apricot', ingredientId: 'apricot_brandy' },
+  { alias: 'apricot liqueur', ingredientId: 'apricot_brandy' },
+
+  // ── CocktailDB: schnapps ──────────────────────────────────────────────────
+  { alias: 'blueberry schnapps', ingredientId: 'creme_de_cassis' },
+  { alias: 'peach schnapps', ingredientId: 'creme_de_peche' },
+
+  // ── CocktailDB: curaçao ───────────────────────────────────────────────────
+  { alias: 'blue curacao', ingredientId: 'curacao_orange' },
+  { alias: 'blue curacao liqueur', ingredientId: 'curacao_orange' },
+
+  // ── CocktailDB: chocolate ─────────────────────────────────────────────────
+  { alias: 'chocolate', ingredientId: 'creme_de_cacao_dark' },
+  { alias: 'chocolate syrup', ingredientId: 'creme_de_cacao_dark' },
+
+  // ── CocktailDB: almond / anise ────────────────────────────────────────────
+  { alias: 'almond flavoring', ingredientId: 'orgeat' },
+  { alias: 'almond syrup', ingredientId: 'orgeat' },
+  { alias: 'wormwood', ingredientId: 'absinthe' },
+
+  // ── CocktailDB: mixers ────────────────────────────────────────────────────
+  { alias: 'club soda', ingredientId: 'soda_water' },
+  { alias: 'carbonated water', ingredientId: 'soda_water' },
+  { alias: 'sparkling water', ingredientId: 'soda_water' },
+  { alias: 'schweppes russchian', ingredientId: 'soda_water' },
+  { alias: 'sprite', ingredientId: 'lemon_lime_soda' },
+  { alias: '7-up', ingredientId: 'lemon_lime_soda' },
+  { alias: '7 up', ingredientId: 'lemon_lime_soda' },
+
+  // ── CocktailDB: cream variants ────────────────────────────────────────────
+  { alias: 'whipped cream', ingredientId: 'cream' },
+  { alias: 'heavy whipping cream', ingredientId: 'cream' },
+  { alias: 'half and half', ingredientId: 'cream' },
+  { alias: 'half & half', ingredientId: 'cream' },
+
+  // ── CocktailDB: garnish strings that appear as ingredients ────────────────
+  { alias: 'orange peel', ingredientId: 'orange_twist' },
+  { alias: 'lemon peel', ingredientId: 'lemon_twist' },
 ];
 
 // Substitute graph. Strength 1.0 = identical, 0.7+ = confident swap,

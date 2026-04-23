@@ -1,5 +1,6 @@
 import type { Recipe } from '../types';
 import { HF_RECIPES } from './recipes_hf';
+import { COCKTAILDB_RECIPES } from './recipes_cocktaildb';
 
 // Seed corpus of IBA-canonical recipes. Each recipe's ingredient IDs
 // must exist in src/data/ingredients.ts. Amounts in ml where known.
@@ -1558,4 +1559,4 @@ const CURATED_RECIPES: Recipe[] = [
   },
 ];
 
-export const RECIPES: Recipe[] = [...CURATED_RECIPES, ...HF_RECIPES];
+export const RECIPES: Recipe[] = [...CURATED_RECIPES, ...HF_RECIPES, ...COCKTAILDB_RECIPES];

@@ -15,6 +15,7 @@
     "pipeline:build": "python3 data-pipeline/build_db.py",
     "pipeline:version": "node data-pipeline/emit_version.mjs",
     "pipeline:hf": "npm run pipeline:export && python3 data-pipeline/import_huggingface.py",
+    "pipeline:cocktaildb": "npm run pipeline:export && python3 data-pipeline/import_cocktaildb.py",
     "pipeline": "npm run pipeline:export && npm run pipeline:build && npm run pipeline:version",
     "cap:sync": "npm run build && cap sync",
     "android:open": "cap open android"
