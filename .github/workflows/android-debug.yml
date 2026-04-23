@@ -3,16 +3,11 @@ name: android-build
 # Builds debug + signed release APKs and attaches them as downloadable
 # artifacts. Triggers on push to main or manually via the Actions UI.
 #
-# Release signing requires four repository secrets:
-#   ANDROID_KEYSTORE_BASE64  — base64-encoded .keystore file
-#   ANDROID_STORE_PASSWORD   — keystore password
-#   ANDROID_KEY_ALIAS        — key alias inside the keystore
-#   ANDROID_KEY_PASSWORD     — key password
-#
-# Generate a keystore once locally (keep the file somewhere safe):
-#   keytool -genkey -v -keystore willitcocktail.keystore \
-#     -alias willitcocktail -keyalg RSA -keysize 2048 -validity 10000
-#   base64 -w 0 willitcocktail.keystore   # paste output into the secret
+# Release signing requires four repository secrets (Settings → Secrets → Actions):
+#   ANDROID_KEYSTORE_BASE64  — base64 -w 0 .willitcocktail.keystore
+#   ANDROID_STORE_PASSWORD   — willitcocktail2026
+#   ANDROID_KEY_ALIAS        — willitcocktail
+#   ANDROID_KEY_PASSWORD     — willitcocktail2026
 
 on:
   push:
@@ -30,6 +25,12 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -59,14 +60,15 @@ jobs:
       - name: Write local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
-      - name: Decode keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      - name: Decode keystore (if secrets are set)
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/willitcocktail.keystore
-          echo "ANDROID_KEYSTORE_PATH=${{ github.workspace }}/android/app/willitcocktail.keystore" >> $GITHUB_ENV
-          echo "ANDROID_STORE_PASSWORD=${{ secrets.ANDROID_STORE_PASSWORD }}" >> $GITHUB_ENV
-          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
-          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/willitcocktail.keystore
+            echo "ANDROID_KEYSTORE_PATH=$GITHUB_WORKSPACE/android/app/willitcocktail.keystore" >> $GITHUB_ENV
+          fi
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
 
       - name: Build debug + release APKs
         run: ./gradlew assembleDebug assembleRelease --no-daemon
