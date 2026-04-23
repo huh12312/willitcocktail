@@ -1,9 +1,9 @@
 name: publish-db
 
 # Weekly snapshot build + publish. Runs the data pipeline, emits a fresh
-# cocktails.db + db-version.json, and uploads them as a GitHub Pages site.
-# Clients with VITE_SNAPSHOT_URL pointed at the Pages URL pick it up on
-# cold start.
+# cocktails.db + db-version.json, and deploys to GitHub Pages under
+# /snapshots/. Up to 3 versioned .db files are carried forward so the
+# rollback workflow can restore a previous build without a full rebuild.
 #
 # Pages on private repos requires GitHub Team/Enterprise. If this repo
 # stays on the free plan, either (a) flip it public, or (b) swap the
@@ -32,7 +32,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.emit.outputs.version }}
+      version: ${{ steps.manifest.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,18 +50,62 @@ jobs:
       - name: Run pipeline
         run: npm run pipeline
 
-      - name: Record version output
-        id: emit
+      - name: Read manifest
+        id: manifest
         run: |
           v=$(node -e "process.stdout.write(require('./public/db-version.json').version)")
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Built version $v"
 
-      - name: Stage publishable artifacts
+      - name: Fetch previous snapshots (best-effort)
         run: |
-          mkdir -p _publish
-          cp public/cocktails.db _publish/
-          cp public/db-version.json _publish/
+          PAGES_BASE="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          mkdir -p _publish/snapshots
+
+          # Pull existing index; on first run the site doesn't exist yet — default to empty.
+          curl --fail -sL "${PAGES_BASE}/snapshots/snapshots-index.json" \
+            -o _existing-index.json 2>/dev/null || echo '[]' > _existing-index.json
+
+          # Carry forward the two previous snapshots so we always have ≤ 3 on disk.
+          PREV_VERSIONS=$(node -e "
+            const idx = require('./_existing-index.json');
+            idx.slice(0, 2).forEach(e => process.stdout.write(e.version + '\n'));
+          " || true)
+
+          for V in $PREV_VERSIONS; do
+            curl --fail -sL "${PAGES_BASE}/snapshots/cocktails-${V}.db" \
+              -o "_publish/snapshots/cocktails-${V}.db" 2>/dev/null \
+              && echo "Carried forward snapshot $V" \
+              || echo "Snapshot $V unavailable (skipping)"
+          done
+
+      - name: Stage artifacts
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          # Versioned archive + current pointers
+          cp public/cocktails.db "_publish/snapshots/cocktails-${VERSION}.db"
+          cp public/cocktails.db _publish/snapshots/cocktails.db
+          cp public/db-version.json _publish/snapshots/db-version.json
+
+          # Merge new manifest into the front of the index; cap at 3 entries.
+          node -e "
+            const fs = require('fs');
+            const existing = JSON.parse(fs.readFileSync('./_existing-index.json', 'utf8'));
+            const newEntry = JSON.parse(fs.readFileSync('./public/db-version.json', 'utf8'));
+            const filtered = existing.filter(e => e.version !== newEntry.version);
+            const updated = [newEntry, ...filtered].slice(0, 3);
+            fs.writeFileSync(
+              '_publish/snapshots/snapshots-index.json',
+              JSON.stringify(updated, null, 2) + '\n',
+            );
+          "
+
+          # Suppress Jekyll so .db files are served as-is.
+          touch _publish/.nojekyll
+
+          echo "Staging complete:"
+          ls -lh _publish/snapshots/
 
       - uses: actions/upload-pages-artifact@v3
         with:

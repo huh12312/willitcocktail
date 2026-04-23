@@ -1,0 +1,111 @@
+name: snapshot-rollback
+
+# Restores a previous snapshot as the live version. Takes any of the last 3
+# versioned builds listed in snapshots-index.json and redeploys it as the
+# current cocktails.db + db-version.json without touching the archive files.
+#
+# Run via: Actions → snapshot-rollback → Run workflow → enter version.
+# The version is the unix timestamp printed by `npm run pipeline:version`
+# (e.g. "1745678901"). Check snapshots-index.json at
+# https://<owner>.github.io/<repo>/snapshots/snapshots-index.json for the
+# list of available versions.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Snapshot version to restore (unix timestamp)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish-db
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      TARGET: ${{ inputs.version }}
+    steps:
+      - name: Fetch current snapshot index
+        run: |
+          PAGES_BASE="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          curl --fail -sL "${PAGES_BASE}/snapshots/snapshots-index.json" -o snapshots-index.json
+          echo "Available snapshots:"
+          node -e "
+            require('./snapshots-index.json').forEach(e =>
+              console.log(' -', e.version, e.builtAt)
+            );
+          "
+
+      - name: Verify version is available
+        run: |
+          FOUND=$(node -e "
+            const idx = require('./snapshots-index.json');
+            process.stdout.write(idx.some(e => e.version === process.env.TARGET) ? 'yes' : 'no');
+          ")
+          if [ "$FOUND" != "yes" ]; then
+            echo "ERROR: version $TARGET is not in snapshots-index.json"
+            echo "Available versions listed above."
+            exit 1
+          fi
+
+      - name: Download all archived snapshots
+        run: |
+          PAGES_BASE="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          mkdir -p _publish/snapshots
+
+          VERSIONS=$(node -e "
+            require('./snapshots-index.json').forEach(e => process.stdout.write(e.version + '\n'));
+          ")
+          for V in $VERSIONS; do
+            curl --fail -sL "${PAGES_BASE}/snapshots/cocktails-${V}.db" \
+              -o "_publish/snapshots/cocktails-${V}.db"
+            echo "Downloaded cocktails-${V}.db"
+          done
+
+      - name: Repoint current to target version
+        run: |
+          # cocktails.db + db-version.json → target version
+          cp "_publish/snapshots/cocktails-${TARGET}.db" _publish/snapshots/cocktails.db
+          node -e "
+            const fs = require('fs');
+            const idx = JSON.parse(fs.readFileSync('./snapshots-index.json', 'utf8'));
+            const entry = idx.find(e => e.version === process.env.TARGET);
+            fs.writeFileSync(
+              '_publish/snapshots/db-version.json',
+              JSON.stringify(entry, null, 2) + '\n',
+            );
+          "
+
+          # Reorder index so target is first (signals it's "current").
+          node -e "
+            const fs = require('fs');
+            const idx = JSON.parse(fs.readFileSync('./snapshots-index.json', 'utf8'));
+            const target = idx.find(e => e.version === process.env.TARGET);
+            const rest = idx.filter(e => e.version !== process.env.TARGET);
+            fs.writeFileSync(
+              '_publish/snapshots/snapshots-index.json',
+              JSON.stringify([target, ...rest], null, 2) + '\n',
+            );
+          "
+
+          touch _publish/.nojekyll
+          echo "Rollback staging complete — target: $TARGET"
+          ls -lh _publish/snapshots/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _publish
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
