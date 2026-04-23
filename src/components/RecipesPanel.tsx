@@ -23,7 +23,13 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
     return data.recipes
       .filter((r) => {
         if (liquorFilter && keyLiquor(r, data)?.id !== liquorFilter) return false;
-        if (q && !r.name.toLowerCase().includes(q)) return false;
+        if (q) {
+          const nameMatch = r.name.toLowerCase().includes(q);
+          const ingredientMatch = r.ingredients.some((ri) =>
+            (data.ingredientById.get(ri.ingredientId)?.name ?? '').toLowerCase().includes(q),
+          );
+          if (!nameMatch && !ingredientMatch) return false;
+        }
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -38,7 +44,7 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search recipes…"
+        placeholder="Search by name or ingredient…"
         className="w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-amber-100 placeholder:text-amber-500/50 focus:outline-none focus:border-amber-500"
       />
 

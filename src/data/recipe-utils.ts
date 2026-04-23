@@ -13,18 +13,16 @@ export function rootSpirit(ingredient: Ingredient, data: DataIndex): Ingredient 
   return cursor ?? null;
 }
 
-/** The dominant spirit in a recipe, resolved to its root category. */
+/** The dominant spirit in a recipe (the ingredient itself, not its root ancestor). */
 export function keyLiquor(recipe: Recipe, data: DataIndex): Ingredient | null {
-  let best: { root: Ingredient; ml: number } | null = null;
+  let best: { ing: Ingredient; ml: number } | null = null;
   for (const ri of recipe.ingredients) {
     const ing = data.ingredientById.get(ri.ingredientId);
-    if (!ing) continue;
-    const root = rootSpirit(ing, data);
-    if (!root) continue;
+    if (!ing || ing.category !== 'spirit') continue;
     const ml = ri.amountMl ?? 0;
-    if (!best || ml > best.ml) best = { root, ml };
+    if (!best || ml > best.ml) best = { ing, ml };
   }
-  return best?.root ?? null;
+  return best?.ing ?? null;
 }
 
 /** All (ingredient, count) pairs for the dominant spirit across a recipe list, sorted descending. */
