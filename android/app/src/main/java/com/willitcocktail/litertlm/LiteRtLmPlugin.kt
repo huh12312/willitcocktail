@@ -23,6 +23,9 @@ import java.io.File
 )
 class LiteRtLmPlugin : Plugin() {
     private val engine: LiteRtEngine by lazy { LiteRtEngine(context) }
+    // Kept outside savedCall/freeSavedCall to avoid Capacitor clearing it
+    // before we read it in handleOnActivityResult.
+    private var importCall: PluginCall? = null
 
     companion object {
         private const val REQUEST_IMPORT = 9001
@@ -117,7 +120,7 @@ class LiteRtLmPlugin : Plugin() {
 
     @PluginMethod
     fun importModelFile(call: PluginCall) {
-        saveCall(call)
+        importCall = call
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
@@ -128,8 +131,8 @@ class LiteRtLmPlugin : Plugin() {
     override fun handleOnActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.handleOnActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_IMPORT) return
-        val call = savedCall ?: return
-        freeSavedCall()
+        val call = importCall ?: return
+        importCall = null
         if (resultCode != Activity.RESULT_OK || data?.data == null) {
             call.reject("cancelled")
             return
