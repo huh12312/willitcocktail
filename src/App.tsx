@@ -30,9 +30,12 @@ function AppShell() {
     <div className="min-h-full max-w-4xl mx-auto p-4 sm:p-6">
       <header className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-amber-100">
-            Will It Cocktail
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-amber-100">
+              Will It Cocktail
+            </h1>
+            <MartiniIcon className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400/75 flex-shrink-0" />
+          </div>
           <p className="text-xs text-amber-400/70 mt-0.5">
             What can you make right now?
           </p>
@@ -86,6 +89,38 @@ function AppShell() {
         Phase 5 — SQLite-backed · weekly sync · grammar-based invent mode
       </footer>
     </div>
+  );
+}
+
+function MartiniIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      {/* Rim — slight arch */}
+      <path d="M2 7 Q16 5 30 7" />
+      {/* Bowl sides */}
+      <line x1="2" y1="7" x2="16" y2="22" />
+      <line x1="30" y1="7" x2="16" y2="22" />
+      {/* Stem — gentle curve */}
+      <path d="M16 22 C15.5 25 16.5 26 16 29" />
+      {/* Base — slight curve */}
+      <path d="M9 29 Q16 30.5 23 29" />
+      {/* Pick — diagonal, exits above rim */}
+      <line x1="12" y1="16" x2="23" y2="5" />
+      {/* Curl at tip of pick */}
+      <path d="M23 5 C25 2 28 3 26 6" />
+      {/* Two olive rings on the pick */}
+      <circle cx="14" cy="14" r="2.5" />
+      <circle cx="17" cy="11" r="2.5" />
+    </svg>
   );
 }
 
