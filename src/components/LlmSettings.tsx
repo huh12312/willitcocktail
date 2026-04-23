@@ -234,16 +234,16 @@ function OnDeviceModelSection() {
   async function importFromDevice() {
     if (!plugin) return;
     setError(null);
-    setBusy('import');
+    // Don't set busy here — the file picker is system UI and gesture-back
+    // may not trigger onActivityResult, leaving the promise hanging forever.
+    // Progress state drives the UI instead; it only updates once copying starts.
     try {
       await plugin.importModelFile();
       setStatus(await plugin.modelStatus());
     } catch (err) {
-      // user cancelled = no-op, anything else = show error
       const msg = err instanceof Error ? err.message : String(err);
       if (msg !== 'cancelled') setError(msg);
     } finally {
-      setBusy(null);
       setProgress(null);
     }
   }
@@ -389,10 +389,10 @@ function OnDeviceModelSection() {
               <button
                 type="button"
                 onClick={() => void importFromDevice()}
-                disabled={busy !== null}
+                disabled={progress !== null}
                 className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                {busy === 'import' ? 'Copying…' : 'Pick file…'}
+                {progress !== null ? 'Copying…' : 'Pick file…'}
               </button>
             </div>
           )}
