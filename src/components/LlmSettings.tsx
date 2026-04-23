@@ -392,14 +392,23 @@ function OnDeviceModelSection() {
                 </p>
                 {downloadModels.length === 0 ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-amber-500/60">No .litertlm files found in Downloads.</p>
-                    <button
-                      type="button"
-                      onClick={() => void rescanDeviceModels()}
-                      className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 transition"
-                    >
-                      Scan again
-                    </button>
+                    <p className="text-xs text-amber-500/60">No .litertlm files found in Downloads. Requires All Files Access permission.</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void plugin!.requestAllFilesAccess().then(() => rescanDeviceModels())}
+                        className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 transition"
+                      >
+                        Grant file access
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void rescanDeviceModels()}
+                        className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 transition"
+                      >
+                        Scan again
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-2">

@@ -13,6 +13,7 @@ interface SnapshotStatusState {
   lastRemote: SnapshotManifest | null;
   lastError: string | null;
   setCurrent: (v: string | null) => void;
+  clearPending: () => void;
   applySync: (r: SyncResult) => void;
 }
 
@@ -25,6 +26,7 @@ export const useSnapshotStatus = create<SnapshotStatusState>()(
       lastRemote: null,
       lastError: null,
       setCurrent: (v) => set({ currentVersion: v }),
+      clearPending: () => set({ pendingVersion: null }),
       applySync: (r) => {
         const at = new Date().toISOString();
         if (r.status === 'installed') {

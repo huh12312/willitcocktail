@@ -182,9 +182,8 @@ class LiteRtLmPlugin : Plugin() {
         if (hasAccess) {
             scanDir(File("/sdcard/Android/data/com.google.ai.edge.gallery/files"), "AI Edge Gallery")
             scanDir(File("/sdcard/Android/data/com.google.aiedge.gallery/files"), "AI Edge Gallery")
+            scanDir(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Downloads")
         }
-        // Downloads is accessible without special permission via copy-from-path
-        scanDir(File("/sdcard/Download"), "Downloads")
 
         call.resolve(JSObject().apply { put("models", arr) })
     }

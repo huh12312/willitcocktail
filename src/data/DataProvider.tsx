@@ -21,6 +21,7 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const customRecipes = useCustomRecipes((s) => s.recipes);
   const setCurrent = useSnapshotStatus((s) => s.setCurrent);
+  const clearPending = useSnapshotStatus((s) => s.clearPending);
   const applySync = useSnapshotStatus((s) => s.applySync);
 
   useEffect(() => {
@@ -39,7 +40,11 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
             : await import('./sqlite-web').then((m) => m.getDbMeta());
           const localVersion = meta.version ?? null;
           setCurrent(localVersion);
-          if (!Capacitor.isNativePlatform()) {
+          if (Capacitor.isNativePlatform()) {
+            // Native doesn't use the snapshot system — clear any stale
+            // pendingVersion so the "Reload to apply" banner never gets stuck.
+            clearPending();
+          } else {
             const cfg = snapshotConfigFromEnv();
             if (cfg) {
               const result = await checkAndInstallSnapshot(cfg, localVersion);
@@ -60,7 +65,7 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, [setCurrent, applySync]);
+  }, [setCurrent, clearPending, applySync]);
 
   const merged = useMemo(() => {
     if (state.status !== 'ready') return null;
