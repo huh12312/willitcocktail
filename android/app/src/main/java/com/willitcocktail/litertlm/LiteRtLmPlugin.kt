@@ -120,6 +120,7 @@ class LiteRtLmPlugin : Plugin() {
 
     @PluginMethod
     fun importModelFile(call: PluginCall) {
+        call.setKeepAlive(true)
         importCall = call
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
