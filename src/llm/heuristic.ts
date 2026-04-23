@@ -8,10 +8,12 @@ import {
   TAG_KEYWORDS,
   type IntentMatch,
   type IntentSearchResult,
+  type InventedRecipe,
   type LlmProvider,
   type ParsedPantry,
 } from './provider';
 import { check_pantry, get_recipe, search_recipes } from './tools';
+import { generateCandidates } from '../generation/generator';
 
 // Simple Levenshtein for short fuzzy matches.
 function levenshtein(a: string, b: string): number {
@@ -238,6 +240,29 @@ export class HeuristicProvider implements LlmProvider {
       matches: topMatches,
       notes,
     };
+  }
+
+  async inventFromPantry(
+    _query: string,
+    pantryIds: string[],
+    data: DataIndex,
+  ): Promise<InventedRecipe[]> {
+    const candidates = generateCandidates({ pantryIds, data, seed: Date.now(), perFamily: 2 });
+    return candidates.slice(0, 4).map((c) => ({
+      name: c.recipe.name,
+      family: c.recipe.family,
+      method: c.recipe.method,
+      glass: c.recipe.glass,
+      garnish: c.recipe.garnish,
+      instructions: c.recipe.instructions,
+      ingredients: c.recipe.ingredients.map((ri) => ({
+        ingredientId: ri.ingredientId,
+        amountDisplay: ri.amountDisplay,
+        amountMl: ri.amountMl,
+        position: ri.position,
+      })),
+      alsoNeeded: [],
+    }));
   }
 }
 

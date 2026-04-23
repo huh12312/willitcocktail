@@ -55,6 +55,8 @@ export interface LiteRtLmPlugin {
   downloadModel(): Promise<{ path: string }>;
   deleteModel(): Promise<void>;
   generate(opts: GenerateOptions): Promise<GenerateResult>;
+  hasAllFilesAccess(): Promise<{ granted: boolean }>;
+  requestAllFilesAccess(): Promise<void>;
   addListener(
     eventName: 'downloadProgress',
     listenerFunc: (event: DownloadProgressEvent) => void,
@@ -81,7 +83,9 @@ export class LitertLmProvider implements LlmProvider {
     if (!p) return false;
     try {
       const s = await p.modelStatus();
-      return s.ready === true;
+      // Check downloaded, not ready — the engine initialises lazily on the
+      // first generate() call, so ready is false until after the first query.
+      return s.downloaded === true;
     } catch {
       return false;
     }
@@ -89,11 +93,11 @@ export class LitertLmProvider implements LlmProvider {
 
   async parseIngredients(input: string, data: DataIndex): Promise<ParsedPantry> {
     const p = requirePlugin();
-    const vocab = sampleVocabulary(data);
+    const vocab = sampleVocabulary(data, input);
     const prompt = buildParsePrompt(input, vocab);
     const res = await p.generate({
       prompt,
-      maxTokens: 512,
+      maxTokens: 1024,
       temperature: 0.1,
       jsonSchema: PARSE_SCHEMA,
     });
@@ -115,7 +119,7 @@ export class LitertLmProvider implements LlmProvider {
     const prompt = buildIntentPrompt(query, pantryIds, candidates, data);
     const res = await p.generate({
       prompt,
-      maxTokens: 768,
+      maxTokens: 1280,
       temperature: 0.3,
       jsonSchema: INTENT_SCHEMA,
     });
@@ -165,12 +169,12 @@ function buildParsePrompt(input: string, vocab: string): string {
     '- confidence: 1.0 certain · 0.7 probable · 0.4 guess.',
     '- Put phrases you cannot map into "unresolved".',
     '',
-    'Return ONLY a JSON object with this shape:',
+    'Return ONLY a raw JSON object — no markdown, no code fences, no explanation:',
     '{ "resolved": [{ "input": string, "ingredient_id": string, "confidence": number }], "unresolved": [string] }',
     '',
     `User input: ${input}`,
     '',
-    'JSON:',
+    'JSON (no fences):',
   ].join('\n');
 }
 
@@ -198,11 +202,11 @@ function buildIntentPrompt(
     'Candidate recipes (rank these — do not invent ids):',
     candidateLines,
     '',
-    'Return ONLY a JSON object:',
+    'Return ONLY a raw JSON object — no markdown, no code fences:',
     '{ "interpretation": string (≤12 words), "matches": [{ "recipe_id": string, "fit_reason": string (≤12 words) }], "notes": string (optional) }',
     'Pick 3–5 best. recipe_id MUST be copied exactly from the list above.',
     '',
-    'JSON:',
+    'JSON (no fences):',
   ].join('\n');
 }
 
@@ -220,10 +224,10 @@ function buildPolishPrompt(candidate: Recipe, data: DataIndex): string {
     `Ingredients:\n${ingredientLines}`,
     `Current placeholder name: ${candidate.name}`,
     '',
-    'Return ONLY a JSON object:',
+    'Return ONLY a raw JSON object — no markdown, no code fences:',
     '{ "name": string (≤4 words, no "The" unless needed), "garnish": string (short phrase), "instructions": string (2-3 sentences), "reasoning": string (1 sentence) }',
     '',
-    'JSON:',
+    'JSON (no fences):',
   ].join('\n');
 }
 
@@ -367,13 +371,48 @@ function mapIntentOutput(
 
 // --- Helpers ---------------------------------------------------------------
 
-function sampleVocabulary(data: DataIndex): string {
-  // Show the model a compact vocabulary. Too much of a 125-item list blows
-  // the on-device prompt budget and dilutes attention.
-  return data.ingredients
-    .slice(0, 40)
-    .map((i) => `${i.id} (${i.name})`)
-    .join(', ');
+function sampleVocabulary(data: DataIndex, input: string): string {
+  // Prioritise ingredients whose name or ID shares a word with the input so
+  // the model always sees the canonical ID for what the user typed, regardless
+  // of DB insertion order. Fill remaining slots from the full list.
+  const words = input.toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  const fmt = (i: { id: string; name: string }) => `${i.id} (${i.name})`;
+
+  // Pass 1: input-relevant ingredients
+  for (const ing of data.ingredients) {
+    const hay = `${ing.id} ${ing.name}`.toLowerCase();
+    if (words.some((w) => hay.includes(w))) {
+      seen.add(ing.id);
+      out.push(fmt(ing));
+    }
+  }
+
+  // Pass 2: also check aliases for relevance
+  for (const alias of data.aliases) {
+    if (seen.has(alias.ingredientId)) continue;
+    const hay = alias.alias.toLowerCase();
+    if (words.some((w) => hay.includes(w))) {
+      const ing = data.ingredientById.get(alias.ingredientId);
+      if (ing) {
+        seen.add(ing.id);
+        out.push(fmt(ing));
+      }
+    }
+  }
+
+  // Pass 3: pad up to 60 with general coverage
+  for (const ing of data.ingredients) {
+    if (out.length >= 60) break;
+    if (!seen.has(ing.id)) {
+      seen.add(ing.id);
+      out.push(fmt(ing));
+    }
+  }
+
+  return out.join(', ');
 }
 
 function sanitiseString(v: unknown, fallback: string, maxLen: number): string {

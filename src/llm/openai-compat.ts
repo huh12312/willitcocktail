@@ -4,11 +4,13 @@ import type { Recipe } from '../types';
 import type {
   IntentMatch,
   IntentSearchResult,
+  InventedRecipe,
   LlmProvider,
   LlmRecipeDetails,
   ParsedPantry,
   RecipePolish,
 } from './provider';
+import type { CocktailFamily, Glass, Method } from '../types';
 import type { CloudConfig } from './settings';
 import {
   check_pantry,
@@ -287,6 +289,43 @@ export class OpenAiCompatProvider implements LlmProvider {
       return JSON.parse(content) as Record<string, unknown>;
     } catch {
       return {};
+    }
+  }
+
+  async inventFromPantry(
+    query: string,
+    pantryIds: string[],
+    data: DataIndex,
+  ): Promise<InventedRecipe[]> {
+    if (pantryIds.length === 0) return [];
+    const pantryLines = pantryIds
+      .map((id) => data.ingredientById.get(id)?.name ?? id)
+      .join(', ');
+    const system = [
+      'You are a cocktail inventor. Design 2-3 original cocktails from the user\'s pantry.',
+      'Follow family balance: sour=2oz spirit:1oz citrus:0.75oz sweetener, old_fashioned=2oz spirit+bitters+sugar, highball=1.5oz spirit+4oz mixer, martini=2oz spirit+0.75oz modifier.',
+      'Use primarily pantry ingredients (ingredientId must be from the pantry list).',
+      'You MAY add up to 2 extra items per drink in "alsoNeeded" as free-text strings (e.g. "2 dashes cardamom bitters", "fresh basil leaf") — these are suggestions outside the pantry.',
+      'Names: max 4 words, distinctive, no generic names.',
+      'Return ONLY JSON: { "inventions": [ { name, family, method, glass, garnish, instructions, reasoning, ingredients: [{ingredientId, amountDisplay, amountMl, position}], alsoNeeded: [] } ] }',
+      `Valid family: sour|highball|old_fashioned|spritz|martini|flip|fizz|julep|other`,
+      `Valid method: shake|stir|build|blend|throw`,
+      `Valid glass: coupe|rocks|highball|collins|martini|nick_and_nora|wine|flute|julep|hurricane`,
+      `Pantry ingredient IDs: ${pantryIds.join(', ')}`,
+    ].join(' ');
+    const user = `Pantry: ${pantryLines}\n\nRequest: ${query.trim() || 'Invent something interesting.'}`;
+    try {
+      const raw = await this.completeJson([
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ]);
+      const arr = Array.isArray(raw.inventions) ? raw.inventions : [];
+      return arr
+        .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+        .map((x) => parseInventedRecipe(x, pantryIds))
+        .filter((x): x is InventedRecipe => x !== null);
+    } catch {
+      return [];
     }
   }
 
@@ -637,5 +676,49 @@ function mapFinalizeIntent(
     interpretation: String(args.interpretation ?? ''),
     matches,
     notes: noteParts.length ? noteParts.join(' · ') : undefined,
+  };
+}
+
+function parseInventedRecipe(
+  raw: Record<string, unknown>,
+  pantryIds: string[],
+): InventedRecipe | null {
+  const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+  if (!name) return null;
+
+  const FAMILIES = new Set(['sour','highball','old_fashioned','spritz','martini','flip','fizz','julep','other']);
+  const METHODS  = new Set(['shake','stir','build','blend','throw']);
+  const GLASSES  = new Set(['coupe','rocks','highball','collins','martini','nick_and_nora','wine','flute','julep','hurricane']);
+
+  const family  = FAMILIES.has(String(raw.family))  ? String(raw.family) as CocktailFamily : 'other';
+  const method  = METHODS.has(String(raw.method))   ? String(raw.method) as Method         : 'shake';
+  const glass   = GLASSES.has(String(raw.glass))    ? String(raw.glass) as Glass           : 'coupe';
+
+  const pantrySet = new Set(pantryIds);
+  const ingredients = (Array.isArray(raw.ingredients) ? raw.ingredients : [])
+    .filter((i): i is Record<string, unknown> => typeof i === 'object' && i !== null)
+    .filter((i) => typeof i.ingredientId === 'string' && pantrySet.has(i.ingredientId as string))
+    .map((i, idx) => ({
+      ingredientId: i.ingredientId as string,
+      amountDisplay: String(i.amountDisplay ?? ''),
+      amountMl: typeof i.amountMl === 'number' ? i.amountMl : undefined,
+      position: typeof i.position === 'number' ? i.position : idx + 1,
+    }));
+
+  if (ingredients.length < 2) return null;
+
+  const alsoNeeded = (Array.isArray(raw.alsoNeeded) ? raw.alsoNeeded : [])
+    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+
+  return {
+    name,
+    family,
+    method,
+    glass,
+    garnish: typeof raw.garnish === 'string' && raw.garnish ? raw.garnish : undefined,
+    instructions: sanitiseString(raw.instructions, '', 600),
+    reasoning: typeof raw.reasoning === 'string' ? raw.reasoning : undefined,
+    ingredients,
+    alsoNeeded,
   };
 }

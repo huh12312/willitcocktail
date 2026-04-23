@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type ProviderChoice = 'auto' | 'cloud' | 'heuristic';
+export type ProviderChoice = 'auto' | 'litert-lm' | 'cloud' | 'heuristic';
 
 export interface CloudConfig {
   baseUrl: string;

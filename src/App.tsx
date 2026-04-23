@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { PantryPanel } from './components/PantryPanel';
 import { MatchesPanel } from './components/MatchesPanel';
 import { AskPanel } from './components/AskPanel';
-import { CreatePanel } from './components/CreatePanel';
 import { RecipesPanel } from './components/RecipesPanel';
 import { RecipeModal } from './components/RecipeModal';
 import { LlmSettings } from './components/LlmSettings';
@@ -10,7 +9,7 @@ import { DataProvider } from './data/DataProvider';
 import { usePantry } from './store/pantry';
 import { activeProviderId } from './llm';
 
-type Tab = 'matches' | 'pantry' | 'ask' | 'create' | 'recipes';
+type Tab = 'matches' | 'pantry' | 'ask' | 'recipes';
 
 export default function App() {
   return (
@@ -51,7 +50,7 @@ function AppShell() {
             aria-label="LLM settings"
             title={`LLM: ${activeProviderId()}`}
           >
-            ⚙ {activeProviderId()}
+            ⚙ {{ 'litert-lm': 'On Device', 'cloud': 'Cloud', 'heuristic': 'Heuristic' }[activeProviderId()]}
           </button>
         </div>
       </header>
@@ -66,9 +65,6 @@ function AppShell() {
         <TabButton active={tab === 'ask'} onClick={() => setTab('ask')}>
           Ask
         </TabButton>
-        <TabButton active={tab === 'create'} onClick={() => setTab('create')}>
-          Create
-        </TabButton>
         <TabButton active={tab === 'recipes'} onClick={() => setTab('recipes')}>
           Recipes
         </TabButton>
@@ -78,7 +74,6 @@ function AppShell() {
         {tab === 'pantry' && <PantryPanel />}
         {tab === 'matches' && <MatchesPanel onSelect={setSelectedRecipe} />}
         {tab === 'ask' && <AskPanel onSelect={setSelectedRecipe} />}
-        {tab === 'create' && <CreatePanel onSelect={setSelectedRecipe} />}
         {tab === 'recipes' && <RecipesPanel onSelect={setSelectedRecipe} />}
       </main>
 

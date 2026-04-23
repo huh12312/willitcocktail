@@ -1,7 +1,7 @@
 import initSqlJs, { type Database } from 'sql.js';
 import type { Ingredient, IngredientAlias, Recipe, Substitute } from '../types';
 import { buildDataIndex, type DataIndex } from './index';
-import { readInstalledSnapshot } from './snapshot';
+import { readInstalledSnapshot, clearInstalledSnapshot, compareVersions } from './snapshot';
 
 export interface SqliteLoadOptions {
   dbUrl?: string;
@@ -19,13 +19,24 @@ async function openDb(opts: SqliteLoadOptions = {}): Promise<Database> {
     locateFile: () => wasmUrl,
   });
 
-  // Prefer a user-installed snapshot (downloaded from the publisher and
-  // stashed in IndexedDB) over the bundled DB. Falls back transparently if
-  // the browser lacks IDB or nothing is installed.
-  const installed = await readInstalledSnapshot();
+  // Prefer a user-installed snapshot over the bundled DB, but only when it's
+  // not older than the bundled DB. After a local `npm run pipeline` the
+  // bundled DB version advances; without this check the stale IDB copy wins.
+  const [installed, bundledMeta] = await Promise.all([
+    readInstalledSnapshot(),
+    fetch('/db-version.json', { cache: 'no-store' })
+      .then((r) => (r.ok ? (r.json() as Promise<{ version: string }>) : null))
+      .catch(() => null),
+  ]);
   if (installed) {
-    dbInstance = new SQL.Database(installed.bytes);
-    return dbInstance;
+    const bundledVersion = bundledMeta?.version ?? null;
+    if (!bundledVersion || compareVersions(installed.version, bundledVersion) >= 0) {
+      dbInstance = new SQL.Database(installed.bytes);
+      return dbInstance;
+    }
+    // Bundled DB is newer — discard the stale IDB snapshot so the next
+    // cold-start sync starts from the correct baseline.
+    await clearInstalledSnapshot();
   }
 
   const response = await fetch(dbUrl);

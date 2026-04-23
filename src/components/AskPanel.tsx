@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
+import { useCustomRecipes } from '../store/custom-recipes';
 import { getLlmProvider, HeuristicProvider } from '../llm';
-import type { IntentSearchResult, LlmRecipeDetails } from '../llm';
+import type { IntentSearchResult, InventedRecipe, LlmRecipeDetails } from '../llm';
+import type { Recipe } from '../types';
 
 interface AskPanelProps {
   onSelect: (id: string) => void;
@@ -19,14 +21,25 @@ export function AskPanel({ onSelect }: AskPanelProps) {
   const data = useData();
   const pantryIds = usePantry((s) => s.ingredients);
   const addToPantry = usePantry((s) => s.add);
+  const saveCustom = useCustomRecipes((s) => s.save);
+  const removeCustom = useCustomRecipes((s) => s.remove);
+  const savedRecipes = useCustomRecipes((s) => s.recipes);
+
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<IntentSearchResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [mentioned, setMentioned] = useState<{ id: string; name: string }[]>([]);
+
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResult, setSearchResult] = useState<IntentSearchResult | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const [inventLoading, setInventLoading] = useState(false);
+  const [invented, setInvented] = useState<InventedRecipe[]>([]);
+
   const [selectedLlmMatch, setSelectedLlmMatch] = useState<IntentSearchResult['matches'][number] | null>(null);
+
   const abortRef = useRef<AbortController | null>(null);
   const heuristic = useMemo(() => new HeuristicProvider(), []);
+  const savedIds = useMemo(() => new Set(savedRecipes.map((r) => r.id)), [savedRecipes]);
 
   async function run(q: string) {
     const trimmed = q.trim();
@@ -35,49 +48,71 @@ export function AskPanel({ onSelect }: AskPanelProps) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    setLoading(true);
-    setError(null);
-    setResult(null);
+    setSearchLoading(true);
+    setInventLoading(true);
+    setSearchError(null);
+    setSearchResult(null);
+    setInvented([]);
     setMentioned([]);
 
-    try {
-      // Extract any ingredients the user named in the query so we can
-      // expand the pantry temporarily and offer to add them permanently.
-      const parsed = await heuristic.parseIngredients(trimmed, data);
-      const pantrySet = new Set(pantryIds);
-      const newMentions = parsed.resolved
-        .filter((r) => !pantrySet.has(r.ingredientId))
-        .map((r) => ({ id: r.ingredientId, name: r.ingredientName }));
-      setMentioned(newMentions);
+    // Parse any ingredients mentioned in the query for pantry expansion suggestion.
+    const parsed = await heuristic.parseIngredients(trimmed, data);
+    const pantrySet = new Set(pantryIds);
+    const newMentions = parsed.resolved
+      .filter((r) => !pantrySet.has(r.ingredientId))
+      .map((r) => ({ id: r.ingredientId, name: r.ingredientName }));
+    setMentioned(newMentions);
 
-      const expandedPantry = Array.from(
-        new Set([...pantryIds, ...newMentions.map((m) => m.id)]),
-      );
+    const expandedPantry = [...new Set([...pantryIds, ...newMentions.map((m) => m.id)])];
 
-      const provider = await getLlmProvider({ signal: ctrl.signal });
-      const res = await provider.searchIntent(trimmed, expandedPantry, data);
-      if (!ctrl.signal.aborted) setResult(res);
-    } catch (err) {
-      if (ctrl.signal.aborted) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (abortRef.current === ctrl) abortRef.current = null;
-      setLoading(false);
-    }
+    // Run both requests in parallel; each resolves independently.
+    const provider = await getLlmProvider({ signal: ctrl.signal });
+
+    provider.searchIntent(trimmed, expandedPantry, data)
+      .then((res) => { if (!ctrl.signal.aborted) setSearchResult(res); })
+      .catch((err) => { if (!ctrl.signal.aborted) setSearchError(err instanceof Error ? err.message : String(err)); })
+      .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setSearchLoading(false); });
+
+    (provider.inventFromPantry
+      ? provider.inventFromPantry(trimmed, pantryIds, data)
+      : Promise.resolve([])
+    )
+      .then((res) => { if (!ctrl.signal.aborted) setInvented(res); })
+      .catch(() => { /* silent — search results stand alone */ })
+      .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setInventLoading(false); });
   }
 
   function cancel() {
     abortRef.current?.abort();
-    setLoading(false);
+    setSearchLoading(false);
+    setInventLoading(false);
   }
+
+  function saveInvented(inv: InventedRecipe) {
+    const id = `gen_${Date.now()}`;
+    const alsoNote = inv.alsoNeeded.length > 0
+      ? `\n\nAlso works well with: ${inv.alsoNeeded.join(', ')}.`
+      : '';
+    const recipe: Recipe = {
+      id,
+      name: inv.name,
+      family: inv.family,
+      method: inv.method,
+      glass: inv.glass,
+      garnish: inv.garnish,
+      instructions: inv.instructions + alsoNote,
+      source: 'generated',
+      ingredients: inv.ingredients,
+    };
+    saveCustom(recipe);
+  }
+
+  const loading = searchLoading || inventLoading;
 
   return (
     <div className="flex flex-col gap-5">
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(query);
-        }}
+        onSubmit={(e) => { e.preventDefault(); void run(query); }}
         className="flex flex-col gap-2"
       >
         <label className="text-sm text-amber-300/80" htmlFor="ask-input">
@@ -115,10 +150,7 @@ export function AskPanel({ onSelect }: AskPanelProps) {
             <button
               key={ex}
               type="button"
-              onClick={() => {
-                setQuery(ex);
-                void run(ex);
-              }}
+              onClick={() => { setQuery(ex); void run(ex); }}
               className="text-xs rounded-full border border-amber-700/40 px-3 py-1 text-amber-300/80 hover:border-amber-500 hover:text-amber-200 transition"
             >
               {ex}
@@ -130,25 +162,94 @@ export function AskPanel({ onSelect }: AskPanelProps) {
       {mentioned.length > 0 && (
         <MentionedIngredients
           mentioned={mentioned}
-          onAdd={(id) => {
-            addToPantry(id);
-            setMentioned((prev) => prev.filter((m) => m.id !== id));
-          }}
-          onAddAll={() => {
-            for (const m of mentioned) addToPantry(m.id);
-            setMentioned([]);
-          }}
+          onAdd={(id) => { addToPantry(id); setMentioned((prev) => prev.filter((m) => m.id !== id)); }}
+          onAddAll={() => { for (const m of mentioned) addToPantry(m.id); setMentioned([]); }}
         />
       )}
 
-      {error && (
+      {searchError && (
         <div className="rounded-md border border-rose-500/40 bg-rose-950/40 p-3 text-sm text-rose-200">
-          {error}
+          {searchError}
         </div>
       )}
 
-      {result && (
-        <ResultView result={result} onSelect={onSelect} onSelectLlm={setSelectedLlmMatch} />
+      {/* From our recipes */}
+      {(searchLoading || searchResult) && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-xs uppercase tracking-wider text-amber-400/60">
+            From our recipes
+          </h2>
+          {searchLoading && !searchResult && (
+            <div className="text-sm text-amber-400/50 animate-pulse">Searching…</div>
+          )}
+          {searchResult && (
+            <SearchResultView
+              result={searchResult}
+              onSelect={onSelect}
+              onSelectLlm={setSelectedLlmMatch}
+            />
+          )}
+        </section>
+      )}
+
+      {/* Created for you */}
+      {(inventLoading || invented.length > 0) && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-xs uppercase tracking-wider text-amber-400/60">
+            Created for you
+          </h2>
+          {inventLoading && invented.length === 0 && (
+            <div className="text-sm text-amber-400/50 animate-pulse">Inventing…</div>
+          )}
+          {invented.length > 0 && (
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+              {invented.map((inv, i) => (
+                <InventedCard
+                  key={i}
+                  inv={inv}
+                  data={data}
+                  saved={savedIds.has(`gen_${inv.name}`)}
+                  onSave={() => saveInvented(inv)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Saved inventions */}
+      {savedRecipes.length > 0 && (
+        <section className="flex flex-col gap-3 mt-2">
+          <h2 className="text-xs uppercase tracking-wider text-emerald-400/60">
+            Saved inventions
+          </h2>
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+            {savedRecipes.map((r) => (
+              <div key={r.id} className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 p-4">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <button
+                    type="button"
+                    onClick={() => onSelect(r.id)}
+                    className="font-semibold text-amber-100 hover:text-amber-300 text-left"
+                  >
+                    {r.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeCustom(r.id)}
+                    className="text-xs text-rose-300/70 hover:text-rose-300"
+                    aria-label="Remove saved recipe"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="text-xs text-amber-400/70 capitalize">
+                  {r.family.replace('_', ' ')} · {r.method}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {selectedLlmMatch && (
@@ -157,6 +258,71 @@ export function AskPanel({ onSelect }: AskPanelProps) {
     </div>
   );
 }
+
+function InventedCard({
+  inv,
+  data,
+  saved,
+  onSave,
+}: {
+  inv: InventedRecipe;
+  data: ReturnType<typeof useData>;
+  saved: boolean;
+  onSave: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 p-4 flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold text-amber-100">{inv.name}</h3>
+          <div className="text-xs text-amber-400/70 capitalize">
+            {inv.family.replace('_', ' ')} · {inv.method}
+          </div>
+        </div>
+        <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-violet-500/15 text-violet-300 border-violet-500/40">
+          Invented
+        </span>
+      </div>
+
+      <ul className="text-xs text-amber-200/80 space-y-0.5">
+        {inv.ingredients.map((ri) => (
+          <li key={`${ri.ingredientId}-${ri.position}`}>
+            <span className="font-mono text-amber-400/70">{ri.amountDisplay}</span>{' '}
+            {data.ingredientById.get(ri.ingredientId)?.name ?? ri.ingredientId}
+          </li>
+        ))}
+      </ul>
+
+      {inv.alsoNeeded.length > 0 && (
+        <div className="rounded-md border border-amber-600/30 bg-amber-900/20 px-2.5 py-2">
+          <div className="text-[10px] uppercase tracking-wider text-amber-400/60 mb-1">
+            Also works well with
+          </div>
+          <ul className="text-xs text-amber-300/90 space-y-0.5">
+            {inv.alsoNeeded.map((item, i) => (
+              <li key={i}>+ {item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {inv.reasoning && (
+        <p className="text-[11px] text-amber-400/60 italic">{inv.reasoning}</p>
+      )}
+
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={saved}
+        className="self-start text-xs rounded-md border border-emerald-500/40 text-emerald-200 px-2.5 py-1 hover:bg-emerald-500/10 transition disabled:opacity-50"
+      >
+        {saved ? 'Saved' : 'Save'}
+      </button>
+    </div>
+  );
+}
+
+// ── Existing search result components (unchanged) ─────────────────────────────
 
 function MentionedIngredients({
   mentioned,
@@ -190,7 +356,6 @@ function MentionedIngredients({
             type="button"
             onClick={() => onAdd(m.id)}
             className="text-xs rounded-full border border-emerald-500/40 text-emerald-200 px-2.5 py-1 hover:bg-emerald-500/10 transition"
-            title={`Add ${m.name} to your pantry`}
           >
             + {m.name}
           </button>
@@ -200,8 +365,7 @@ function MentionedIngredients({
   );
 }
 
-
-function ResultView({
+function SearchResultView({
   result,
   onSelect,
   onSelectLlm,
@@ -212,11 +376,9 @@ function ResultView({
 }) {
   const data = useData();
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="text-sm text-amber-300/80 italic">{result.interpretation}</div>
-      {result.notes && (
-        <div className="text-xs text-amber-400/70">{result.notes}</div>
-      )}
+      {result.notes && <div className="text-xs text-amber-400/70">{result.notes}</div>}
       {result.matches.length === 0 ? (
         <div className="rounded-lg border border-amber-700/40 p-6 text-center text-amber-300/70">
           No matches — try different words or add ingredients to your pantry.
@@ -341,19 +503,12 @@ function LlmRecipeModal({
             <h2 className="text-xl font-bold text-amber-100">{match.recipeName}</h2>
             <span className="text-[10px] uppercase tracking-wider text-sky-300">AI suggestion · not in database</span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-amber-400/60 hover:text-amber-200 transition text-lg leading-none shrink-0"
-            aria-label="Close"
-          >
+          <button type="button" onClick={onClose} className="text-amber-400/60 hover:text-amber-200 transition text-lg leading-none shrink-0" aria-label="Close">
             ✕
           </button>
         </div>
 
-        {loading && (
-          <p className="text-sm text-amber-400/60 animate-pulse mb-4">Fetching recipe…</p>
-        )}
+        {loading && <p className="text-sm text-amber-400/60 animate-pulse mb-4">Fetching recipe…</p>}
 
         {!loading && details && (
           <>
@@ -363,7 +518,6 @@ function LlmRecipeModal({
                 {details.garnish && <span>Garnish: {details.garnish}</span>}
               </div>
             )}
-
             <div className="mb-4">
               <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">Ingredients</h3>
               <ul className="space-y-1">
@@ -375,7 +529,6 @@ function LlmRecipeModal({
                 ))}
               </ul>
             </div>
-
             {details.instructions && (
               <div className="mb-4">
                 <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">Instructions</h3>
@@ -390,7 +543,7 @@ function LlmRecipeModal({
         )}
 
         <p className="text-xs text-sky-400/70 border-t border-amber-800/40 pt-4">
-          AI-generated — ingredients and proportions are approximate. Verify before mixing.
+          AI-generated — ingredients and proportions are approximate.
         </p>
       </div>
     </div>
@@ -399,10 +552,10 @@ function LlmRecipeModal({
 
 function MakeabilityBadge({ makeability }: { makeability: IntentSearchResult['matches'][number]['makeability'] }) {
   const map = {
-    now: { label: 'Make now', cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
-    with_substitute: { label: 'Sub needed', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-    missing_one: { label: 'Need 1', cls: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
-    cannot_make: { label: 'Stretch', cls: 'bg-stone-500/20 text-stone-300 border-stone-500/40' },
+    now:            { label: 'Make now',  cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+    with_substitute:{ label: 'Sub needed',cls: 'bg-amber-500/20  text-amber-300  border-amber-500/40'  },
+    missing_one:    { label: 'Need 1',    cls: 'bg-rose-500/20   text-rose-300   border-rose-500/40'   },
+    cannot_make:    { label: 'Stretch',   cls: 'bg-stone-500/20  text-stone-300  border-stone-500/40'  },
   } as const;
   const m = map[makeability];
   return (

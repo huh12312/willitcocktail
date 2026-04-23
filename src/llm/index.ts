@@ -1,10 +1,11 @@
 import { HeuristicProvider } from './heuristic';
-import { LitertLmProvider } from './litert-lm';
+import { LitertLmProvider, getLiteRtLmPlugin } from './litert-lm';
 import { OpenAiCompatProvider } from './openai-compat';
 import type { LlmProvider } from './provider';
 import { useLlmSettings, isCloudConfigured, type ProviderChoice } from './settings';
+import { Capacitor } from '@capacitor/core';
 
-export type { LlmProvider, ParsedPantry, IntentMatch, IntentSearchResult, LlmRecipeDetails } from './provider';
+export type { LlmProvider, ParsedPantry, IntentMatch, IntentSearchResult, LlmRecipeDetails, InventedRecipe } from './provider';
 export { HeuristicProvider } from './heuristic';
 export { LitertLmProvider } from './litert-lm';
 export { OpenAiCompatProvider } from './openai-compat';
@@ -47,6 +48,7 @@ export async function getLlmProvider(opts: GetProviderOptions = {}): Promise<Llm
 
 function shouldTry(choice: ProviderChoice, id: 'litert-lm' | 'cloud' | 'heuristic'): boolean {
   if (choice === 'auto') return true;
+  if (choice === 'litert-lm') return id === 'litert-lm';
   if (choice === 'cloud') return id === 'cloud';
   if (choice === 'heuristic') return id === 'heuristic';
   return false;
@@ -54,8 +56,14 @@ function shouldTry(choice: ProviderChoice, id: 'litert-lm' | 'cloud' | 'heuristi
 
 export function activeProviderId(): 'litert-lm' | 'cloud' | 'heuristic' {
   const { choice, cloud } = useLlmSettings.getState();
+  const hasPlugin = Capacitor.isNativePlatform() && !!getLiteRtLmPlugin();
+
+  if (choice === 'litert-lm') return hasPlugin ? 'litert-lm' : 'heuristic';
   if (choice === 'cloud' && isCloudConfigured(cloud)) return 'cloud';
   if (choice === 'heuristic') return 'heuristic';
-  if (choice === 'auto' && isCloudConfigured(cloud)) return 'cloud';
+  // auto: mirrors getLlmProvider() priority order (sync proxy — model download
+  // check is async so plugin presence is used as a stand-in)
+  if (hasPlugin) return 'litert-lm';
+  if (isCloudConfigured(cloud)) return 'cloud';
   return 'heuristic';
 }

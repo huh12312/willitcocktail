@@ -1,5 +1,5 @@
 import type { DataIndex } from '../data';
-import type { CocktailFamily, Recipe } from '../types';
+import type { CocktailFamily, Glass, Method, Recipe } from '../types';
 import type { FlavorTag } from '../data/flavor-tags';
 
 export interface RecipePolish {
@@ -39,6 +39,25 @@ export interface IntentSearchResult {
   notes?: string;
 }
 
+export interface InventedRecipe {
+  name: string;
+  family: CocktailFamily;
+  method: Method;
+  glass: Glass;
+  garnish?: string;
+  instructions: string;
+  reasoning?: string;
+  /** Pantry ingredients — all ingredientIds are canonical and in the user's pantry. */
+  ingredients: {
+    ingredientId: string;
+    amountDisplay: string;
+    amountMl?: number;
+    position: number;
+  }[];
+  /** Free-text ingredients the LLM recommends that are outside the canonical list. */
+  alsoNeeded: string[];
+}
+
 export interface LlmRecipeDetails {
   ingredients: { name: string; amount: string }[];
   instructions: string;
@@ -60,6 +79,15 @@ export interface LlmProvider {
   proposeRecipe?(candidate: Recipe, data: DataIndex): Promise<RecipePolish>;
   /** Fetch full recipe details for a named cocktail not in the local DB. */
   getLlmRecipeDetails?(name: string): Promise<LlmRecipeDetails | null>;
+  /**
+   * Invent novel cocktails from the user's pantry. May suggest ingredients
+   * outside the canonical list via `alsoNeeded` free-text strings.
+   */
+  inventFromPantry?(
+    query: string,
+    pantryIds: string[],
+    data: DataIndex,
+  ): Promise<InventedRecipe[]>;
 }
 
 // Flavor tags keyed by common English vocabulary (used by heuristic)

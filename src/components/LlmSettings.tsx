@@ -53,8 +53,13 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
           <label className="text-xs uppercase tracking-wider text-amber-400/70">
             Provider
           </label>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {(['auto', 'cloud', 'heuristic'] as const).map((c) => (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {([
+              ['auto', 'Auto'],
+              ['litert-lm', 'On-device'],
+              ['cloud', 'Cloud'],
+              ['heuristic', 'Heuristic'],
+            ] as const).map(([c, label]) => (
               <button
                 key={c}
                 type="button"
@@ -66,12 +71,12 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
                     : 'border-amber-700/40 text-amber-200 hover:border-amber-500',
                 ].join(' ')}
               >
-                {c === 'auto' ? 'Auto' : c === 'cloud' ? 'Cloud' : 'Heuristic'}
+                {label}
               </button>
             ))}
           </div>
           <p className="text-xs text-amber-400/60 mt-2">
-            Auto picks on-device (Android) if available, then cloud, then the offline heuristic.
+            Auto picks on-device if model is downloaded, then cloud, then the offline heuristic.
           </p>
         </section>
 
@@ -158,6 +163,8 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
           <div className="text-xs">
             {choice === 'heuristic' ? (
               <span className="text-amber-400/70">Offline heuristic selected.</span>
+            ) : choice === 'litert-lm' ? (
+              <span className="text-amber-400/70">On-device forced — falls back to heuristic if not ready.</span>
             ) : configured ? (
               <span className="text-emerald-400">Cloud configured.</span>
             ) : (
@@ -206,6 +213,26 @@ function OnDeviceModelSection() {
       void handleRef?.remove();
     };
   }, [plugin]);
+
+  const isLocalFile = modelUrl.startsWith('file://');
+
+  async function useLocalFile() {
+    if (!plugin || !modelUrl) return;
+    setError(null);
+    try {
+      await plugin.setModelConfig({ url: modelUrl });
+      setStatus(await plugin.modelStatus());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function openAllFilesAccess() {
+    if (!plugin) return;
+    await plugin.requestAllFilesAccess();
+    // Re-check status after user returns from Settings.
+    setStatus(await plugin.modelStatus());
+  }
 
   async function download() {
     if (!plugin || !modelUrl) return;
@@ -310,16 +337,37 @@ function OnDeviceModelSection() {
         {error && <div className="text-rose-300/80">Error: {error}</div>}
       </div>
 
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={() => void download()}
-          disabled={!plugin || !modelUrl || busy !== null}
-          className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {busy === 'download' ? 'Downloading…' : 'Download model'}
-        </button>
-        {status?.downloaded && (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {isLocalFile ? (
+          <>
+            <button
+              type="button"
+              onClick={() => void useLocalFile()}
+              disabled={!plugin || !modelUrl}
+              className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              Use local file
+            </button>
+            <button
+              type="button"
+              onClick={() => void openAllFilesAccess()}
+              disabled={!plugin}
+              className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 transition"
+            >
+              Grant file access
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void download()}
+            disabled={!plugin || !modelUrl || busy !== null}
+            className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {busy === 'download' ? 'Downloading…' : 'Download model'}
+          </button>
+        )}
+        {status?.downloaded && !isLocalFile && (
           <button
             type="button"
             onClick={() => void removeModel()}

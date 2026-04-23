@@ -3,9 +3,8 @@ import type { Ingredient, IngredientAlias, Recipe, Substitute } from '../types';
 import { buildDataIndex, type DataIndex } from './index';
 
 const DB_NAME = 'cocktails';
-// The pre-built cocktails.db is shipped with the APK under android/app/src/main/assets/public/cocktails.db.
-// Capacitor SQLite can import a pre-built asset into the app's DB dir on first launch.
-// See https://github.com/capacitor-community/sqlite/blob/master/docs/ImportExportJson.md
+// cocktails.db ships in android/app/src/main/assets/databases/ and is copied
+// to the app's database directory on first launch via copyFromAssets().
 
 let connectionCache: SQLiteDBConnection | null = null;
 
@@ -13,6 +12,11 @@ async function openNativeDb(): Promise<SQLiteDBConnection> {
   if (connectionCache) return connectionCache;
 
   const sqlite = new SQLiteConnection(CapacitorSQLite);
+
+  // Copies bundled DBs from assets/databases/ into the app's DB dir on first
+  // launch. No-op on subsequent launches when the DB is already installed.
+  await sqlite.copyFromAssets(false);
+
   const ret = await sqlite.checkConnectionsConsistency();
   const isConn = (await sqlite.isConnection(DB_NAME, false)).result;
 
