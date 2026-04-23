@@ -1,6 +1,7 @@
 package com.willitcocktail.litertlm
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -13,37 +14,19 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
+import org.json.JSONArray
+import java.io.File
 
-/**
- * Capacitor bridge to the on-device LLM engine (LiteRT-LM / MediaPipe GenAI).
- *
- * The heavy lifting lives in [LiteRtEngine] so that this class stays focused
- * on call-plumbing. Kotlin-side we keep a single engine instance, lazily
- * initialised after a model is downloaded.
- *
- * ## Wiring into an app
- *
- * 1. Copy this file into your Android module's source tree, keeping the
- *    package unchanged.
- * 2. Register the plugin in `MainActivity.onCreate`:
- *
- *        class MainActivity : BridgeActivity() {
- *          override fun onCreate(savedInstanceState: Bundle?) {
- *            registerPlugin(LiteRtLmPlugin::class.java)
- *            super.onCreate(savedInstanceState)
- *          }
- *        }
- *
- * 3. Add the LiteRT-LM / MediaPipe GenAI dependency to `app/build.gradle`.
- *    See README.md in this directory — the coord is left there (not here) so
- *    a version bump doesn't require code changes.
- */
 @CapacitorPlugin(
     name = "LiteRtLm",
     permissions = [Permission(alias = "network", strings = [Manifest.permission.INTERNET])],
 )
 class LiteRtLmPlugin : Plugin() {
     private val engine: LiteRtEngine by lazy { LiteRtEngine(context) }
+
+    companion object {
+        private const val REQUEST_IMPORT = 9001
+    }
 
     @PluginMethod
     fun modelStatus(call: PluginCall) {
@@ -73,16 +56,14 @@ class LiteRtLmPlugin : Plugin() {
     fun downloadModel(call: PluginCall) {
         engine.downloadAsync(
             onProgress = { bytes, total ->
-                val evt = JSObject().apply {
+                notifyListeners("downloadProgress", JSObject().apply {
                     put("bytesDownloaded", bytes)
                     put("totalBytes", total)
-                }
-                notifyListeners("downloadProgress", evt)
+                })
             },
             onComplete = { result ->
                 result.onSuccess { path ->
-                    val out = JSObject().apply { put("path", path) }
-                    call.resolve(out)
+                    call.resolve(JSObject().apply { put("path", path) })
                 }
                 result.onFailure { err ->
                     call.reject(err.message ?: "download failed", Exception(err))
@@ -108,41 +89,100 @@ class LiteRtLmPlugin : Plugin() {
             call.reject("prompt is required")
             return
         }
-        val maxTokens = call.getInt("maxTokens") ?: 512
-        val temperature = call.getFloat("temperature") ?: 0.3f
-        val topK = call.getInt("topK") ?: 40
-        // jsonSchema constrained decoding not yet supported by litertlm-android;
-        // safeJsonParse on the TS side handles model-level deviations.
-
         engine.generateAsync(
             prompt = prompt,
-            maxTokens = maxTokens,
-            temperature = temperature,
-            topK = topK,
+            maxTokens = call.getInt("maxTokens") ?: 512,
+            temperature = call.getFloat("temperature") ?: 0.3f,
+            topK = call.getInt("topK") ?: 40,
             onComplete = { result ->
                 result.onSuccess { output ->
-                    val out = JSObject().apply {
+                    call.resolve(JSObject().apply {
                         put("text", output.text)
                         output.tokenCount?.let { put("tokenCount", it) }
                         put("stopReason", output.stopReason)
-                    }
-                    call.resolve(out)
+                    })
                 }
                 result.onFailure { err ->
-                    val out = JSObject().apply {
+                    call.resolve(JSObject().apply {
                         put("text", "")
                         put("stopReason", "error")
                         put("errorMessage", err.message ?: "unknown error")
-                    }
-                    // Resolve (not reject) so TS-side can surface the
-                    // GenerateResult.stopReason=error UX uniformly. Rejects
-                    // would force every caller into try/catch when an
-                    // expected failure path already exists.
-                    call.resolve(out)
+                    })
                 }
             },
         )
     }
+
+    // --- Import from device (file picker) ------------------------------------
+
+    @PluginMethod
+    fun importModelFile(call: PluginCall) {
+        saveCall(call)
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(call, intent, REQUEST_IMPORT)
+    }
+
+    override fun handleOnActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.handleOnActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_IMPORT) return
+        val call = savedCall ?: return
+        freeSavedCall()
+        if (resultCode != Activity.RESULT_OK || data?.data == null) {
+            call.reject("cancelled")
+            return
+        }
+        engine.importFromUri(
+            resolver = context.contentResolver,
+            uri = data.data!!,
+            onProgress = { bytes, total ->
+                notifyListeners("importProgress", JSObject().apply {
+                    put("bytesWritten", bytes)
+                    put("totalBytes", total)
+                })
+            },
+            onComplete = { result ->
+                result.onSuccess { path ->
+                    call.resolve(JSObject().apply { put("path", path) })
+                }
+                result.onFailure { err ->
+                    call.reject(err.message ?: "import failed", Exception(err))
+                }
+            },
+        )
+    }
+
+    // --- Device model scanner (AI Edge Gallery / Pixel AICore) ---------------
+
+    @PluginMethod
+    fun detectDeviceModels(call: PluginCall) {
+        val arr = JSONArray()
+        val hasAccess = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            Environment.isExternalStorageManager()
+        if (hasAccess) {
+            val searchRoots = listOf(
+                File("/sdcard/Android/data/com.google.ai.edge.gallery/files"),
+                File("/sdcard/Android/data/com.google.aiedge.gallery/files"),
+            )
+            for (root in searchRoots) {
+                if (!root.exists()) continue
+                root.walkTopDown()
+                    .filter { it.isFile && it.name.endsWith(".litertlm") }
+                    .forEach { f ->
+                        arr.put(JSObject().apply {
+                            put("path", f.absolutePath)
+                            put("name", f.parentFile?.parentFile?.name ?: f.nameWithoutExtension)
+                            put("sizeBytes", f.length())
+                        })
+                    }
+            }
+        }
+        call.resolve(JSObject().apply { put("models", arr) })
+    }
+
+    // --- All-files-access permission -----------------------------------------
 
     @PluginMethod
     fun hasAllFilesAccess(call: PluginCall) {
@@ -157,14 +197,11 @@ class LiteRtLmPlugin : Plugin() {
             !Environment.isExternalStorageManager()
         ) {
             val packageUri = Uri.parse("package:${context.packageName}")
-            // Try the app-specific page first; some OEM ROMs don't have it.
             val intent = try {
                 Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri)
                     .also { activity.packageManager.resolveActivity(it, 0)
                         ?: throw ActivityNotFoundException() }
             } catch (_: ActivityNotFoundException) {
-                // Fall back to the app's general Settings page where the user
-                // can find Additional permissions → All files access manually.
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri)
             }
             activity.startActivity(intent)

@@ -189,60 +189,38 @@ function OnDeviceModelSection() {
     useLitertLmConfig();
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [progress, setProgress] = useState<{ bytes: number; total: number } | null>(null);
-  const [busy, setBusy] = useState<'download' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'download' | 'import' | 'delete' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'download' | 'import' | 'device'>('download');
+  const [deviceModels, setDeviceModels] = useState<import('../llm/litert-lm').DeviceModel[]>([]);
   const plugin = getLiteRtLmPlugin();
   const native = Capacitor.isNativePlatform();
 
   useEffect(() => {
     if (!plugin) return;
     let cancelled = false;
-    plugin.modelStatus().then((s) => {
-      if (!cancelled) setStatus(s);
-    });
-    let handleRef: { remove: () => Promise<void> } | null = null;
-    plugin
-      .addListener('downloadProgress', (evt) => {
+    plugin.modelStatus().then((s) => { if (!cancelled) setStatus(s); });
+    plugin.detectDeviceModels().then((r) => { if (!cancelled) setDeviceModels(r.models); });
+    const listeners: Promise<{ remove: () => Promise<void> }>[] = [
+      plugin.addListener('downloadProgress', (evt) => {
         setProgress({ bytes: evt.bytesDownloaded, total: evt.totalBytes });
-      })
-      .then((h) => {
-        handleRef = h;
-      });
+      }),
+      plugin.addListener('importProgress', (evt) => {
+        setProgress({ bytes: evt.bytesWritten, total: evt.totalBytes });
+      }),
+    ];
     return () => {
       cancelled = true;
-      void handleRef?.remove();
+      listeners.forEach((p) => p.then((h) => h.remove()));
     };
   }, [plugin]);
-
-  const isLocalFile = modelUrl.startsWith('file://');
-
-  async function useLocalFile() {
-    if (!plugin || !modelUrl) return;
-    setError(null);
-    try {
-      await plugin.setModelConfig({ url: modelUrl });
-      setStatus(await plugin.modelStatus());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function openAllFilesAccess() {
-    if (!plugin) return;
-    await plugin.requestAllFilesAccess();
-    // Re-check status after user returns from Settings.
-    setStatus(await plugin.modelStatus());
-  }
 
   async function download() {
     if (!plugin || !modelUrl) return;
     setError(null);
     setBusy('download');
     try {
-      await plugin.setModelConfig({
-        url: modelUrl,
-        expectedSha256: expectedSha256 || undefined,
-      });
+      await plugin.setModelConfig({ url: modelUrl, expectedSha256: expectedSha256 || undefined });
       await plugin.downloadModel();
       setStatus(await plugin.modelStatus());
     } catch (err) {
@@ -250,6 +228,34 @@ function OnDeviceModelSection() {
     } finally {
       setBusy(null);
       setProgress(null);
+    }
+  }
+
+  async function importFromDevice() {
+    if (!plugin) return;
+    setError(null);
+    setBusy('import');
+    try {
+      await plugin.importModelFile();
+      setStatus(await plugin.modelStatus());
+    } catch (err) {
+      // user cancelled = no-op, anything else = show error
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg !== 'cancelled') setError(msg);
+    } finally {
+      setBusy(null);
+      setProgress(null);
+    }
+  }
+
+  async function useDeviceModel(path: string) {
+    if (!plugin) return;
+    setError(null);
+    try {
+      await plugin.setModelConfig({ url: `file://${path}` });
+      setStatus(await plugin.modelStatus());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -266,6 +272,8 @@ function OnDeviceModelSection() {
     }
   }
 
+  const fmtMb = (b: number) => `${(b / (1024 * 1024)).toFixed(1)} MB`;
+
   return (
     <section className="mb-5 pt-4 border-t border-amber-800/30">
       <label className="text-xs uppercase tracking-wider text-amber-400/70">
@@ -274,110 +282,166 @@ function OnDeviceModelSection() {
 
       {!native && (
         <p className="text-xs text-amber-400/60 mt-2">
-          Android-only. On web, LLM calls go to the cloud provider or the offline heuristic.
+          Android-only. On web, LLM calls use the cloud provider or offline heuristic.
         </p>
       )}
 
       {native && !plugin && (
         <p className="text-xs text-rose-300/80 mt-2">
-          Native plugin not registered. See <code>capacitor-plugins/litert-lm/README.md</code>.
+          Native plugin not registered.
         </p>
       )}
 
-      <div className="mt-2 space-y-2">
-        <div>
-          <label className="text-[11px] text-amber-400/70">Model URL</label>
-          <input
-            type="url"
-            placeholder="https://…/gemma-2b-it-cpu.task"
-            value={modelUrl}
-            onChange={(e) => setModelUrl(e.target.value)}
-            className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 text-xs text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
-          />
-        </div>
-        <div>
-          <label className="text-[11px] text-amber-400/70">
-            Expected SHA-256 (optional but recommended)
-          </label>
-          <input
-            type="text"
-            placeholder="sha256 hex"
-            value={expectedSha256}
-            onChange={(e) => setExpectedSha256(e.target.value)}
-            className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 font-mono text-[11px] text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
-          />
-        </div>
-      </div>
-
-      <div className="mt-3 text-xs text-amber-200/80 space-y-1">
-        <div>
-          Status:{' '}
-          <span className="font-mono text-amber-300">
-            {!plugin
-              ? '—'
-              : status?.ready
-                ? 'ready'
-                : status?.downloaded
-                  ? 'downloaded'
-                  : 'not downloaded'}
-          </span>
-          {status?.sizeBytes && (
-            <span className="text-amber-400/60 ml-2">
-              ({(status.sizeBytes / (1024 * 1024)).toFixed(1)} MB)
-            </span>
-          )}
-        </div>
-        {progress && progress.total > 0 && (
-          <div className="text-emerald-300">
-            Downloading {(progress.bytes / (1024 * 1024)).toFixed(1)} /{' '}
-            {(progress.total / (1024 * 1024)).toFixed(1)} MB (
-            {Math.round((progress.bytes / progress.total) * 100)}%)
+      {native && plugin && (
+        <>
+          {/* Status bar */}
+          <div className="mt-2 text-xs text-amber-200/80 space-y-1">
+            <div>
+              Status:{' '}
+              <span className="font-mono text-amber-300">
+                {status?.ready ? 'ready' : status?.downloaded ? 'downloaded' : 'not downloaded'}
+              </span>
+              {status?.sizeBytes != null && (
+                <span className="text-amber-400/60 ml-2">({fmtMb(status.sizeBytes)})</span>
+              )}
+            </div>
+            {progress && progress.total > 0 && (
+              <div className="text-emerald-300">
+                {busy === 'import' ? 'Copying' : 'Downloading'}{' '}
+                {fmtMb(progress.bytes)} / {fmtMb(progress.total)}{' '}
+                ({Math.round((progress.bytes / progress.total) * 100)}%)
+              </div>
+            )}
+            {error && <div className="text-rose-300/80">Error: {error}</div>}
           </div>
-        )}
-        {error && <div className="text-rose-300/80">Error: {error}</div>}
-      </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {isLocalFile ? (
-          <>
-            <button
-              type="button"
-              onClick={() => void useLocalFile()}
-              disabled={!plugin || !modelUrl}
-              className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              Use local file
-            </button>
-            <button
-              type="button"
-              onClick={() => void openAllFilesAccess()}
-              disabled={!plugin}
-              className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 transition"
-            >
-              Grant file access
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void download()}
-            disabled={!plugin || !modelUrl || busy !== null}
-            className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {busy === 'download' ? 'Downloading…' : 'Download model'}
-          </button>
-        )}
-        {status?.downloaded && !isLocalFile && (
-          <button
-            type="button"
-            onClick={() => void removeModel()}
-            disabled={busy !== null}
-            className="rounded-md border border-rose-500/40 px-3 py-1.5 text-xs text-rose-200 hover:bg-rose-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {busy === 'delete' ? 'Removing…' : 'Remove model'}
-          </button>
-        )}
-      </div>
+          {/* Tab switcher */}
+          <div className="mt-3 flex gap-1 bg-amber-900/30 rounded-md p-0.5 text-xs">
+            {(['download', 'import', 'device'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={[
+                  'flex-1 py-1 rounded transition',
+                  tab === t
+                    ? 'bg-amber-500 text-amber-950 font-medium'
+                    : 'text-amber-300/70 hover:text-amber-200',
+                ].join(' ')}
+              >
+                {t === 'download' ? 'Download' : t === 'import' ? 'Import file' : 'On device'}
+              </button>
+            ))}
+          </div>
+
+          {/* Download tab */}
+          {tab === 'download' && (
+            <div className="mt-3 space-y-2">
+              <div>
+                <label className="text-[11px] text-amber-400/70">Model URL</label>
+                <input
+                  type="url"
+                  placeholder="https://…/model.litertlm"
+                  value={modelUrl.startsWith('file://') ? '' : modelUrl}
+                  onChange={(e) => setModelUrl(e.target.value)}
+                  className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 text-xs text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-amber-400/70">SHA-256 (optional)</label>
+                <input
+                  type="text"
+                  placeholder="sha256 hex"
+                  value={expectedSha256}
+                  onChange={(e) => setExpectedSha256(e.target.value)}
+                  className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 font-mono text-[11px] text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void download()}
+                  disabled={!modelUrl || modelUrl.startsWith('file://') || busy !== null}
+                  className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {busy === 'download' ? 'Downloading…' : 'Download'}
+                </button>
+                {status?.downloaded && (
+                  <button
+                    type="button"
+                    onClick={() => void removeModel()}
+                    disabled={busy !== null}
+                    className="rounded-md border border-rose-500/40 px-3 py-1.5 text-xs text-rose-200 hover:bg-rose-500/10 disabled:opacity-50 transition"
+                  >
+                    {busy === 'delete' ? 'Removing…' : 'Remove'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Import tab */}
+          {tab === 'import' && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-amber-400/60">
+                Pick a <code>.litertlm</code> file from your device — the app will copy it to internal storage.
+              </p>
+              <button
+                type="button"
+                onClick={() => void importFromDevice()}
+                disabled={busy !== null}
+                className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {busy === 'import' ? 'Copying…' : 'Pick file…'}
+              </button>
+            </div>
+          )}
+
+          {/* On-device tab (AI Edge Gallery / Pixel) */}
+          {tab === 'device' && (
+            <div className="mt-3 space-y-2">
+              {deviceModels.length === 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-amber-400/60">
+                    No models detected. Requires All Files Access permission and AI Edge Gallery (or similar) installed.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void plugin.requestAllFilesAccess().then(() =>
+                      plugin.detectDeviceModels().then((r) => setDeviceModels(r.models))
+                    )}
+                    className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 transition"
+                  >
+                    Grant file access &amp; scan
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-amber-400/60">
+                    Found {deviceModels.length} model{deviceModels.length !== 1 ? 's' : ''} — uses the file directly with no copy.
+                  </p>
+                  {deviceModels.map((m) => (
+                    <div key={m.path} className="flex items-center justify-between gap-2 rounded-md border border-amber-700/40 px-3 py-2">
+                      <div>
+                        <div className="text-xs text-amber-100">{m.name}</div>
+                        <div className="text-[10px] text-amber-400/60">{fmtMb(m.sizeBytes)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void useDeviceModel(m.path)}
+                        disabled={busy !== null}
+                        className="shrink-0 rounded-md border border-amber-700/40 px-3 py-1 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 transition"
+                      >
+                        Use
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }

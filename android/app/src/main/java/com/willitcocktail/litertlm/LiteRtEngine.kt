@@ -1,6 +1,8 @@
 package com.willitcocktail.litertlm
 
+import android.content.ContentResolver
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
@@ -8,6 +10,7 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -156,6 +159,54 @@ class LiteRtEngine(private val appContext: Context) {
                 onComplete(Result.success(dest.absolutePath))
             } catch (t: Throwable) {
                 Log.e(tag, "download failed", t)
+                onComplete(Result.failure(t))
+            }
+        }
+    }
+
+    // --- Import from content URI (file picker) ---------------------------
+
+    fun importFromUri(
+        resolver: ContentResolver,
+        uri: Uri,
+        onProgress: (Long, Long) -> Unit,
+        onComplete: (Result<String>) -> Unit,
+    ) {
+        executor.execute {
+            try {
+                // Always import to the default internal path regardless of configuredUrl.
+                val dest = File(appContext.filesDir, "llm/model.litertlm")
+                dest.parentFile?.mkdirs()
+                val tmp = File(dest.parentFile, "model.litertlm.part")
+
+                val total = resolver.openFileDescriptor(uri, "r")
+                    ?.use { it.statSize } ?: -1L
+
+                resolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(tmp).use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        var written = 0L
+                        var lastReport = 0L
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            written += n
+                            if (written - lastReport > 256 * 1024) {
+                                onProgress(written, total)
+                                lastReport = written
+                            }
+                        }
+                        onProgress(written, total)
+                    }
+                } ?: throw IOException("cannot open input stream for URI")
+
+                engineRef.getAndSet(null)?.close()
+                if (dest.exists()) dest.delete()
+                if (!tmp.renameTo(dest)) throw RuntimeException("cannot rename imported model")
+                onComplete(Result.success(dest.absolutePath))
+            } catch (t: Throwable) {
+                Log.e(tag, "import failed", t)
                 onComplete(Result.failure(t))
             }
         }

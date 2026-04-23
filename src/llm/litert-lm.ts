@@ -51,17 +51,34 @@ export interface GenerateResult {
   errorMessage?: string;
 }
 
+export interface DeviceModel {
+  path: string;
+  name: string;
+  sizeBytes: number;
+}
+
+export interface ImportProgressEvent {
+  bytesWritten: number;
+  totalBytes: number;
+}
+
 export interface LiteRtLmPlugin {
   modelStatus(): Promise<ModelStatus>;
   setModelConfig(opts: { url: string; expectedSha256?: string }): Promise<void>;
   downloadModel(): Promise<{ path: string }>;
   deleteModel(): Promise<void>;
   generate(opts: GenerateOptions): Promise<GenerateResult>;
+  importModelFile(): Promise<{ path: string }>;
+  detectDeviceModels(): Promise<{ models: DeviceModel[] }>;
   hasAllFilesAccess(): Promise<{ granted: boolean }>;
   requestAllFilesAccess(): Promise<void>;
   addListener(
     eventName: 'downloadProgress',
     listenerFunc: (event: DownloadProgressEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'importProgress',
+    listenerFunc: (event: ImportProgressEvent) => void,
   ): Promise<PluginListenerHandle>;
 }
 
