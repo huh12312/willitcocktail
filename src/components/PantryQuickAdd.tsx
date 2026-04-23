@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
-import { getLlmProvider } from '../llm';
+import { HeuristicProvider } from '../llm';
 import type { ParsedPantry } from '../llm';
 
 export function PantryQuickAdd() {
@@ -17,8 +17,7 @@ export function PantryQuickAdd() {
     setLoading(true);
     setConfirmedIds(new Set());
     try {
-      const provider = await getLlmProvider();
-      const res = await provider.parseIngredients(text, data);
+      const res = await new HeuristicProvider().parseIngredients(text, data);
       setParsed(res);
     } catch (err) {
       console.error('parse failed', err);

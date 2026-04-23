@@ -3,9 +3,11 @@ import type { DataIndex } from '../data';
 import { matchRecipes } from '../matcher';
 import { RECIPE_TAGS, type FlavorTag } from '../data/flavor-tags';
 import type { Recipe } from '../types';
+import { useLitertLmConfig } from '../store/litertlm-config';
 import type {
   IntentMatch,
   IntentSearchResult,
+  InventedRecipe,
   LlmProvider,
   ParsedPantry,
   RecipePolish,
@@ -82,9 +84,14 @@ export class LitertLmProvider implements LlmProvider {
     const p = getLiteRtLmPlugin();
     if (!p) return false;
     try {
+      // Always sync the persisted URL to the engine before checking status.
+      // configuredUrl is in-memory only — without this it resets to the
+      // default internal path on every cold call and misses file:// sideloads.
+      const { modelUrl, expectedSha256 } = useLitertLmConfig.getState();
+      if (modelUrl) {
+        await p.setModelConfig({ url: modelUrl, expectedSha256: expectedSha256 || undefined });
+      }
       const s = await p.modelStatus();
-      // Check downloaded, not ready — the engine initialises lazily on the
-      // first generate() call, so ready is false until after the first query.
       return s.downloaded === true;
     } catch {
       return false;
@@ -143,6 +150,23 @@ export class LitertLmProvider implements LlmProvider {
       instructions: sanitiseString(parsed?.instructions, candidate.instructions, 400),
       reasoning: sanitiseString(parsed?.reasoning, '', 300),
     };
+  }
+
+  async inventFromPantry(
+    query: string,
+    pantryIds: string[],
+    data: DataIndex,
+  ): Promise<InventedRecipe[]> {
+    const p = requirePlugin();
+    const prompt = buildInventPrompt(query, pantryIds, data);
+    const res = await p.generate({
+      prompt,
+      maxTokens: 1536,
+      temperature: 0.7,
+      jsonSchema: INVENT_SCHEMA,
+    });
+    const parsed = safeJsonParse(res.text);
+    return mapInventOutput(parsed, pantryIds, data);
   }
 }
 
@@ -515,4 +539,124 @@ const POLISH_SCHEMA = JSON.stringify({
     reasoning: { type: 'string' },
   },
   required: ['name', 'garnish', 'instructions', 'reasoning'],
+});
+
+// --- Invent prompt & schema -------------------------------------------------
+
+function buildInventPrompt(query: string, pantryIds: string[], data: DataIndex): string {
+  const pantryLines = pantryIds
+    .map((id) => {
+      const ing = data.ingredientById.get(id);
+      return ing ? `${id} (${ing.name}, ${ing.category})` : null;
+    })
+    .filter(Boolean)
+    .join(', ');
+
+  return [
+    'You are a cocktail designer. Create 2 original cocktails using ONLY the ingredients listed in the pantry.',
+    '',
+    'COCKTAIL FAMILY RULES (pick the best fit):',
+    '- SOUR: 45ml spirit + 22ml citrus + 22ml sweetener. Shaken. Coupe.',
+    '- HIGHBALL: 45ml spirit + 120ml mixer. Built. Highball.',
+    '- OLD_FASHIONED: 60ml spirit + 7ml sweetener + 2 dashes bitters. Stirred. Rocks.',
+    '- MARTINI: 60ml spirit + 30ml modifier. Stirred. Coupe or martini.',
+    '- SPRITZ: 90ml sparkling wine + 60ml bitter liqueur + splash soda. Built. Wine glass.',
+    '- FIZZ: 45ml spirit + 22ml citrus + 22ml sweetener + soda top. Shaken then built. Highball.',
+    '',
+    `PANTRY: ${pantryLines}`,
+    '',
+    `REQUEST: ${query}`,
+    '',
+    'RULES:',
+    '- Every ingredient_id MUST be copied exactly from the PANTRY list above.',
+    '- Do not invent ingredients outside the pantry.',
+    '- Amounts in ml. Use standard pours: 60=2oz, 45=1.5oz, 30=1oz, 22=0.75oz, 15=0.5oz.',
+    '- 3-5 ingredients per drink (not counting garnish).',
+    '- Name: 2-4 words, evocative, no generic names.',
+    '',
+    'Return ONLY a raw JSON array of 2 recipes — no markdown, no fences:',
+    '[{"name":string,"family":"sour|highball|old_fashioned|martini|spritz|fizz|julep","method":"shake|stir|build","glass":"coupe|rocks|highball|martini|collins|wine","garnish":string,"instructions":string,"reasoning":string,"ingredients":[{"ingredient_id":string,"amount_ml":number}]}]',
+    '',
+    'JSON (no fences):',
+  ].join('\n');
+}
+
+function mapInventOutput(parsed: any, pantryIds: string[], data: DataIndex): InventedRecipe[] {
+  const pantrySet = new Set(pantryIds);
+  const raw = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.recipes) ? parsed.recipes : []);
+  const results: InventedRecipe[] = [];
+
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue;
+
+    const rawIngs = Array.isArray(r.ingredients) ? r.ingredients : [];
+    const missing: string[] = [];
+    const ingredients = rawIngs
+      .map((ri: any, idx: number) => {
+        const id = String(ri?.ingredient_id ?? '').trim();
+        // Drop hallucinated IDs not in the canonical DB at all.
+        if (!data.ingredientById.has(id)) return null;
+        const amountMl = typeof ri?.amount_ml === 'number' ? ri.amount_ml : undefined;
+        if (!pantrySet.has(id)) missing.push(id);
+        return {
+          ingredientId: id,
+          amountDisplay: amountMl ? formatMlToOz(amountMl) : (ri?.amount_display ?? 'to taste'),
+          amountMl,
+          position: idx + 1,
+        };
+      })
+      .filter((x: any): x is NonNullable<typeof x> => x !== null);
+
+    if (ingredients.length < 2) continue;
+
+    results.push({
+      name: sanitiseString(r.name, 'Unnamed', 48),
+      family: sanitiseString(r.family, 'sour', 20) as InventedRecipe['family'],
+      method: sanitiseString(r.method, 'shake', 10) as InventedRecipe['method'],
+      glass: sanitiseString(r.glass, 'coupe', 10) as InventedRecipe['glass'],
+      garnish: sanitiseString(r.garnish, '', 80),
+      instructions: sanitiseString(r.instructions, '', 400),
+      reasoning: sanitiseString(r.reasoning, '', 300),
+      ingredients,
+      missing,
+      alsoNeeded: [],
+    });
+  }
+
+  return results;
+}
+
+function formatMlToOz(ml: number): string {
+  const oz = ml / 30;
+  const snapped = Math.round(oz * 4) / 4; // snap to nearest 0.25 oz
+  if (snapped === Math.floor(snapped)) return `${snapped} oz`;
+  return `${snapped} oz`;
+}
+
+const INVENT_SCHEMA = JSON.stringify({
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      family: { type: 'string' },
+      method: { type: 'string' },
+      glass: { type: 'string' },
+      garnish: { type: 'string' },
+      instructions: { type: 'string' },
+      reasoning: { type: 'string' },
+      ingredients: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ingredient_id: { type: 'string' },
+            amount_ml: { type: 'number' },
+          },
+          required: ['ingredient_id', 'amount_ml'],
+        },
+      },
+    },
+    required: ['name', 'family', 'method', 'glass', 'instructions', 'ingredients'],
+  },
 });

@@ -3,6 +3,7 @@ import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
 import { useCustomRecipes } from '../store/custom-recipes';
 import { getLlmProvider, HeuristicProvider } from '../llm';
+
 import type { IntentSearchResult, InventedRecipe, LlmRecipeDetails } from '../llm';
 import type { Recipe } from '../types';
 
@@ -31,11 +32,14 @@ export function AskPanel({ onSelect }: AskPanelProps) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<IntentSearchResult | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [openSearch, setOpenSearch] = useState(false);
 
   const [inventLoading, setInventLoading] = useState(false);
   const [invented, setInvented] = useState<InventedRecipe[]>([]);
+  const [openInvent, setOpenInvent] = useState(false);
 
   const [selectedLlmMatch, setSelectedLlmMatch] = useState<IntentSearchResult['matches'][number] | null>(null);
+  const [selectedInvented, setSelectedInvented] = useState<InventedRecipe | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const heuristic = useMemo(() => new HeuristicProvider(), []);
@@ -54,6 +58,8 @@ export function AskPanel({ onSelect }: AskPanelProps) {
     setSearchResult(null);
     setInvented([]);
     setMentioned([]);
+    setOpenSearch(false);
+    setOpenInvent(false);
 
     // Parse any ingredients mentioned in the query for pantry expansion suggestion.
     const parsed = await heuristic.parseIngredients(trimmed, data);
@@ -65,21 +71,22 @@ export function AskPanel({ onSelect }: AskPanelProps) {
 
     const expandedPantry = [...new Set([...pantryIds, ...newMentions.map((m) => m.id)])];
 
-    // Run both requests in parallel; each resolves independently.
-    const provider = await getLlmProvider({ signal: ctrl.signal });
-
-    provider.searchIntent(trimmed, expandedPantry, data)
+    // "From our recipes" always uses the heuristic — fast, offline, deterministic.
+    heuristic.searchIntent(trimmed, expandedPantry, data)
       .then((res) => { if (!ctrl.signal.aborted) setSearchResult(res); })
       .catch((err) => { if (!ctrl.signal.aborted) setSearchError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setSearchLoading(false); });
 
-    (provider.inventFromPantry
-      ? provider.inventFromPantry(trimmed, pantryIds, data)
-      : Promise.resolve([])
-    )
-      .then((res) => { if (!ctrl.signal.aborted) setInvented(res); })
-      .catch(() => { /* silent — search results stand alone */ })
-      .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setInventLoading(false); });
+    // "Created for you" uses the full LLM provider.
+    getLlmProvider({ signal: ctrl.signal }).then((provider) =>
+      (provider.inventFromPantry
+        ? provider.inventFromPantry(trimmed, pantryIds, data)
+        : Promise.resolve([])
+      )
+        .then((res) => { if (!ctrl.signal.aborted) setInvented(res); })
+        .catch(() => { /* silent — search results stand alone */ })
+        .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setInventLoading(false); })
+    );
   }
 
   function cancel() {
@@ -175,13 +182,14 @@ export function AskPanel({ onSelect }: AskPanelProps) {
 
       {/* From our recipes */}
       {(searchLoading || searchResult) && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-xs uppercase tracking-wider text-amber-400/60">
-            From our recipes
-          </h2>
-          {searchLoading && !searchResult && (
-            <div className="text-sm text-amber-400/50 animate-pulse">Searching…</div>
-          )}
+        <CollapsibleSection
+          title="From our recipes"
+          loading={searchLoading}
+          loadingLabel="Searching…"
+          count={searchResult?.matches.length ?? 0}
+          open={openSearch}
+          onToggle={() => setOpenSearch((o) => !o)}
+        >
           {searchResult && (
             <SearchResultView
               result={searchResult}
@@ -189,32 +197,32 @@ export function AskPanel({ onSelect }: AskPanelProps) {
               onSelectLlm={setSelectedLlmMatch}
             />
           )}
-        </section>
+        </CollapsibleSection>
       )}
 
       {/* Created for you */}
       {(inventLoading || invented.length > 0) && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-xs uppercase tracking-wider text-amber-400/60">
-            Created for you
-          </h2>
-          {inventLoading && invented.length === 0 && (
-            <div className="text-sm text-amber-400/50 animate-pulse">Inventing…</div>
-          )}
-          {invented.length > 0 && (
-            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-              {invented.map((inv, i) => (
-                <InventedCard
-                  key={i}
-                  inv={inv}
-                  data={data}
-                  saved={savedIds.has(`gen_${inv.name}`)}
-                  onSave={() => saveInvented(inv)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+        <CollapsibleSection
+          title="Created for you"
+          loading={inventLoading}
+          loadingLabel="Inventing…"
+          count={invented.length}
+          open={openInvent}
+          onToggle={() => setOpenInvent((o) => !o)}
+        >
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+            {invented.map((inv, i) => (
+              <InventedCard
+                key={i}
+                inv={inv}
+                data={data}
+                saved={savedIds.has(`gen_${inv.name}`)}
+                onSave={() => saveInvented(inv)}
+                onOpen={() => setSelectedInvented(inv)}
+              />
+            ))}
+          </div>
+        </CollapsibleSection>
       )}
 
       {/* Saved inventions */}
@@ -255,7 +263,64 @@ export function AskPanel({ onSelect }: AskPanelProps) {
       {selectedLlmMatch && (
         <LlmRecipeModal match={selectedLlmMatch} onClose={() => setSelectedLlmMatch(null)} />
       )}
+      {selectedInvented && (
+        <InventedRecipeModal
+          inv={selectedInvented}
+          data={data}
+          saved={savedIds.has(`gen_${selectedInvented.name}`)}
+          onSave={() => saveInvented(selectedInvented)}
+          onClose={() => setSelectedInvented(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  loading,
+  loadingLabel,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  loading: boolean;
+  loadingLabel: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={loading || count === 0}
+        className="flex items-center justify-between w-full group disabled:cursor-default"
+      >
+        <span className="text-xs uppercase tracking-wider text-amber-400/60 group-hover:text-amber-300/80 transition group-disabled:group-hover:text-amber-400/60">
+          {title}
+        </span>
+        <span className="flex items-center gap-2">
+          {loading ? (
+            <span className="text-xs text-amber-400/50 normal-case animate-pulse">{loadingLabel}</span>
+          ) : count > 0 ? (
+            <>
+              <span className="text-[10px] rounded-full bg-amber-900/50 border border-amber-700/40 text-amber-300/70 px-2 py-0.5">
+                {count}
+              </span>
+              <span className="text-amber-400/50 text-xs">{open ? '▲' : '▼'}</span>
+            </>
+          ) : (
+            <span className="text-xs text-amber-500/40">none</span>
+          )}
+        </span>
+      </button>
+      {open && !loading && children}
+    </section>
   );
 }
 
@@ -264,52 +329,37 @@ function InventedCard({
   data,
   saved,
   onSave,
+  onOpen,
 }: {
   inv: InventedRecipe;
   data: ReturnType<typeof useData>;
   saved: boolean;
   onSave: () => void;
+  onOpen: () => void;
 }) {
   return (
     <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 p-4 flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="font-semibold text-amber-100">{inv.name}</h3>
-          <div className="text-xs text-amber-400/70 capitalize">
-            {inv.family.replace('_', ' ')} · {inv.method}
+      <button type="button" onClick={onOpen} className="text-left">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <div>
+            <h3 className="font-semibold text-amber-100 hover:text-amber-300 transition">{inv.name}</h3>
+            <div className="text-xs text-amber-400/70 capitalize">
+              {inv.family.replace('_', ' ')} · {inv.method}
+            </div>
           </div>
+          <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-violet-500/15 text-violet-300 border-violet-500/40">
+            Invented
+          </span>
         </div>
-        <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-violet-500/15 text-violet-300 border-violet-500/40">
-          Invented
-        </span>
-      </div>
-
-      <ul className="text-xs text-amber-200/80 space-y-0.5">
-        {inv.ingredients.map((ri) => (
-          <li key={`${ri.ingredientId}-${ri.position}`}>
-            <span className="font-mono text-amber-400/70">{ri.amountDisplay}</span>{' '}
-            {data.ingredientById.get(ri.ingredientId)?.name ?? ri.ingredientId}
-          </li>
-        ))}
-      </ul>
-
-      {inv.alsoNeeded.length > 0 && (
-        <div className="rounded-md border border-amber-600/30 bg-amber-900/20 px-2.5 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-amber-400/60 mb-1">
-            Also works well with
-          </div>
-          <ul className="text-xs text-amber-300/90 space-y-0.5">
-            {inv.alsoNeeded.map((item, i) => (
-              <li key={i}>+ {item}</li>
-            ))}
-          </ul>
+        <div className="text-xs text-amber-300/60">
+          {inv.ingredients.length} ingredient{inv.ingredients.length === 1 ? '' : 's'}
+          {inv.missing.length > 0 && (
+            <span className="text-rose-300/80 ml-1">
+              · Need: {inv.missing.map((id) => data.ingredientById.get(id)?.name ?? id).join(', ')}
+            </span>
+          )}
         </div>
-      )}
-
-      {inv.reasoning && (
-        <p className="text-[11px] text-amber-400/60 italic">{inv.reasoning}</p>
-      )}
-
+      </button>
       <button
         type="button"
         onClick={onSave}
@@ -318,6 +368,102 @@ function InventedCard({
       >
         {saved ? 'Saved' : 'Save'}
       </button>
+    </div>
+  );
+}
+
+function InventedRecipeModal({
+  inv,
+  data,
+  saved,
+  onSave,
+  onClose,
+}: {
+  inv: InventedRecipe;
+  data: ReturnType<typeof useData>;
+  saved: boolean;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-violet-700/50 bg-amber-950 p-6 shadow-2xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-amber-100">{inv.name}</h2>
+            <div className="text-xs text-amber-400/70 capitalize mt-0.5">
+              {inv.family.replace('_', ' ')} · {inv.method} · {inv.glass.replace('_', ' ')}
+              {inv.garnish && <span> · {inv.garnish}</span>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-amber-400/60 hover:text-amber-200 transition text-lg leading-none shrink-0"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mb-4">
+          <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">Ingredients</h3>
+          <ul className="space-y-1">
+            {inv.ingredients.map((ri) => {
+              const isMissing = inv.missing.includes(ri.ingredientId);
+              return (
+                <li key={`${ri.ingredientId}-${ri.position}`} className="flex justify-between text-sm">
+                  <span className={isMissing ? 'text-rose-300/80' : 'text-amber-100'}>
+                    {isMissing && <span className="text-[10px] uppercase tracking-wider mr-1 opacity-70">need</span>}
+                    {data.ingredientById.get(ri.ingredientId)?.name ?? ri.ingredientId}
+                  </span>
+                  <span className="text-amber-400/70 ml-4 shrink-0 font-mono text-xs">{ri.amountDisplay}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {inv.alsoNeeded.length > 0 && (
+          <div className="mb-4 rounded-md border border-amber-600/30 bg-amber-900/20 px-3 py-2.5">
+            <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-1.5">Also works well with</h3>
+            <ul className="space-y-1">
+              {inv.alsoNeeded.map((item, i) => (
+                <li key={i} className="text-sm text-amber-300/90">+ {item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {inv.instructions && (
+          <div className="mb-4">
+            <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">Instructions</h3>
+            <p className="text-sm text-amber-100/90 leading-relaxed">{inv.instructions}</p>
+          </div>
+        )}
+
+        {inv.reasoning && (
+          <p className="text-xs text-amber-400/60 italic mb-4">{inv.reasoning}</p>
+        )}
+
+        <div className="flex items-center justify-between pt-4 border-t border-amber-800/40">
+          <p className="text-xs text-violet-400/70">AI-generated · verify before mixing</p>
+          <button
+            type="button"
+            onClick={() => { onSave(); onClose(); }}
+            disabled={saved}
+            className="text-xs rounded-md border border-emerald-500/40 text-emerald-200 px-3 py-1.5 hover:bg-emerald-500/10 transition disabled:opacity-50"
+          >
+            {saved ? 'Saved' : 'Save recipe'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -45,12 +45,14 @@ class LiteRtEngine(private val appContext: Context) {
 
     // --- Model file management ------------------------------------------
 
-    // When configuredUrl is a file:// path (dev sideload), use it directly.
-    // Otherwise use the managed download destination in the app's files dir.
+    // When configuredUrl is a file:// path (dev sideload), use it if accessible.
+    // Fall back to the internal default so ROM-level FUSE restrictions don't
+    // silently break the engine when the external path is blocked.
     private fun resolvedModelFile(): File {
         val url = configuredUrl
         if (url != null && url.startsWith("file://")) {
-            return File(url.removePrefix("file://"))
+            val f = File(url.removePrefix("file://"))
+            if (f.exists()) return f
         }
         return File(appContext.filesDir, "llm/model.litertlm")
     }

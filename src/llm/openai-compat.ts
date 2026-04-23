@@ -322,7 +322,7 @@ export class OpenAiCompatProvider implements LlmProvider {
       const arr = Array.isArray(raw.inventions) ? raw.inventions : [];
       return arr
         .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
-        .map((x) => parseInventedRecipe(x, pantryIds))
+        .map((x) => parseInventedRecipe(x, pantryIds, data))
         .filter((x): x is InventedRecipe => x !== null);
     } catch {
       return [];
@@ -682,6 +682,7 @@ function mapFinalizeIntent(
 function parseInventedRecipe(
   raw: Record<string, unknown>,
   pantryIds: string[],
+  data: DataIndex,
 ): InventedRecipe | null {
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
   if (!name) return null;
@@ -695,15 +696,20 @@ function parseInventedRecipe(
   const glass   = GLASSES.has(String(raw.glass))    ? String(raw.glass) as Glass           : 'coupe';
 
   const pantrySet = new Set(pantryIds);
+  const missing: string[] = [];
   const ingredients = (Array.isArray(raw.ingredients) ? raw.ingredients : [])
     .filter((i): i is Record<string, unknown> => typeof i === 'object' && i !== null)
-    .filter((i) => typeof i.ingredientId === 'string' && pantrySet.has(i.ingredientId as string))
-    .map((i, idx) => ({
-      ingredientId: i.ingredientId as string,
-      amountDisplay: String(i.amountDisplay ?? ''),
-      amountMl: typeof i.amountMl === 'number' ? i.amountMl : undefined,
-      position: typeof i.position === 'number' ? i.position : idx + 1,
-    }));
+    .filter((i) => typeof i.ingredientId === 'string' && data.ingredientById.has(i.ingredientId as string))
+    .map((i, idx) => {
+      const id = i.ingredientId as string;
+      if (!pantrySet.has(id)) missing.push(id);
+      return {
+        ingredientId: id,
+        amountDisplay: String(i.amountDisplay ?? ''),
+        amountMl: typeof i.amountMl === 'number' ? i.amountMl : undefined,
+        position: typeof i.position === 'number' ? i.position : idx + 1,
+      };
+    });
 
   if (ingredients.length < 2) return null;
 
@@ -719,6 +725,7 @@ function parseInventedRecipe(
     instructions: sanitiseString(raw.instructions, '', 600),
     reasoning: typeof raw.reasoning === 'string' ? raw.reasoning : undefined,
     ingredients,
+    missing: [],
     alsoNeeded,
   };
 }

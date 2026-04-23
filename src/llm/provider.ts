@@ -47,14 +47,16 @@ export interface InventedRecipe {
   garnish?: string;
   instructions: string;
   reasoning?: string;
-  /** Pantry ingredients — all ingredientIds are canonical and in the user's pantry. */
+  /** All canonical ingredients in the recipe (may include missing ones). */
   ingredients: {
     ingredientId: string;
     amountDisplay: string;
     amountMl?: number;
     position: number;
   }[];
-  /** Free-text ingredients the LLM recommends that are outside the canonical list. */
+  /** Canonical ingredient IDs the recipe needs that aren't in the pantry. */
+  missing: string[];
+  /** Free-text suggestions outside the canonical ingredient list. */
   alsoNeeded: string[];
 }
 

@@ -261,6 +261,7 @@ export class HeuristicProvider implements LlmProvider {
         amountMl: ri.amountMl,
         position: ri.position,
       })),
+      missing: [],
       alsoNeeded: [],
     }));
   }
