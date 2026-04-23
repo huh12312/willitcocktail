@@ -19,6 +19,7 @@ on:
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
+      - '.github/workflows/android-debug.yml'
   workflow_dispatch:
 
 jobs:
