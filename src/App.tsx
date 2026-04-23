@@ -86,7 +86,7 @@ function AppShell() {
       <LlmSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <footer className="mt-12 pt-6 border-t border-amber-800/30 text-xs text-amber-400/50 text-center">
-        Phase 5 — SQLite-backed · weekly sync · grammar-based invent mode
+        Know your bar. Own every pour.
       </footer>
     </div>
   );
