@@ -1,10 +1,18 @@
-name: android-debug
+name: android-build
 
-# Builds a debug APK and attaches it to the workflow run as a downloadable
-# artifact. Triggers on push to main or manually via the Actions UI.
+# Builds debug + signed release APKs and attaches them as downloadable
+# artifacts. Triggers on push to main or manually via the Actions UI.
 #
-# The APK is unsigned (debug keystore) — suitable for sideloading via
-# "Install unknown apps" or adb install. Not for Play Store submission.
+# Release signing requires four repository secrets:
+#   ANDROID_KEYSTORE_BASE64  — base64-encoded .keystore file
+#   ANDROID_STORE_PASSWORD   — keystore password
+#   ANDROID_KEY_ALIAS        — key alias inside the keystore
+#   ANDROID_KEY_PASSWORD     — key password
+#
+# Generate a keystore once locally (keep the file somewhere safe):
+#   keytool -genkey -v -keystore willitcocktail.keystore \
+#     -alias willitcocktail -keyalg RSA -keysize 2048 -validity 10000
+#   base64 -w 0 willitcocktail.keystore   # paste output into the secret
 
 on:
   push:
@@ -45,19 +53,35 @@ jobs:
       - name: Build web assets
         run: npm run build
 
-      - name: Sync Capacitor (copies web assets into android/)
+      - name: Sync Capacitor
         run: npx cap sync android
 
       - name: Write local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Decode keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/willitcocktail.keystore
+          echo "ANDROID_KEYSTORE_PATH=${{ github.workspace }}/android/app/willitcocktail.keystore" >> $GITHUB_ENV
+          echo "ANDROID_STORE_PASSWORD=${{ secrets.ANDROID_STORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Build debug + release APKs
+        run: ./gradlew assembleDebug assembleRelease --no-daemon
         working-directory: android
 
-      - name: Upload APK artifact
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: willitcocktail-debug-${{ github.sha }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: willitcocktail-release-${{ github.sha }}
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
