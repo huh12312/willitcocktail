@@ -212,6 +212,47 @@ class LiteRtEngine(private val appContext: Context) {
         }
     }
 
+    fun importFromPath(
+        src: File,
+        onProgress: (Long, Long) -> Unit,
+        onComplete: (Result<String>) -> Unit,
+    ) {
+        executor.execute {
+            try {
+                if (!src.exists()) throw IllegalArgumentException("file not found: ${src.absolutePath}")
+                val dest = File(appContext.filesDir, "llm/model.litertlm")
+                dest.parentFile?.mkdirs()
+                val tmp = File(dest.parentFile, "model.litertlm.part")
+                val total = src.length()
+                src.inputStream().use { input ->
+                    FileOutputStream(tmp).use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        var written = 0L
+                        var lastReport = 0L
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            written += n
+                            if (written - lastReport > 256 * 1024) {
+                                onProgress(written, total)
+                                lastReport = written
+                            }
+                        }
+                        onProgress(written, total)
+                    }
+                }
+                engineRef.getAndSet(null)?.close()
+                if (dest.exists()) dest.delete()
+                if (!tmp.renameTo(dest)) throw RuntimeException("cannot rename imported model")
+                onComplete(Result.success(dest.absolutePath))
+            } catch (t: Throwable) {
+                Log.e(tag, "importFromPath failed", t)
+                onComplete(Result.failure(t))
+            }
+        }
+    }
+
     // --- Inference -------------------------------------------------------
 
     fun generateAsync(

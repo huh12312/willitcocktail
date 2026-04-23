@@ -33,20 +33,21 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
         // or previously installed snapshot) before kicking off the remote
         // check — avoids flashing a stale "checking…" against the wrong
         // baseline.
-        if (!Capacitor.isNativePlatform()) {
-          try {
-            const { getDbMeta } = await import('./sqlite-web');
-            const meta = await getDbMeta();
-            const localVersion = meta.version ?? null;
-            setCurrent(localVersion);
+        try {
+          const meta = Capacitor.isNativePlatform()
+            ? await import('./sqlite-native').then((m) => m.getDbMeta())
+            : await import('./sqlite-web').then((m) => m.getDbMeta());
+          const localVersion = meta.version ?? null;
+          setCurrent(localVersion);
+          if (!Capacitor.isNativePlatform()) {
             const cfg = snapshotConfigFromEnv();
             if (cfg) {
               const result = await checkAndInstallSnapshot(cfg, localVersion);
               if (!cancelled) applySync(result);
             }
-          } catch {
-            /* non-fatal: stay on whatever loaded */
           }
+        } catch {
+          /* non-fatal: stay on whatever loaded */
         }
       })
       .catch((err: unknown) => {

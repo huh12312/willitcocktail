@@ -231,21 +231,23 @@ function OnDeviceModelSection() {
     }
   }
 
-  async function importFromDevice() {
+  async function importFromPath(path: string) {
     if (!plugin) return;
     setError(null);
-    // Don't set busy here — the file picker is system UI and gesture-back
-    // may not trigger onActivityResult, leaving the promise hanging forever.
-    // Progress state drives the UI instead; it only updates once copying starts.
     try {
-      await plugin.importModelFile();
+      await plugin.importModelFromPath({ path });
       setStatus(await plugin.modelStatus());
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg !== 'cancelled') setError(msg);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setProgress(null);
     }
+  }
+
+  async function rescanDeviceModels() {
+    if (!plugin) return;
+    const r = await plugin.detectDeviceModels();
+    setDeviceModels(r.models);
   }
 
   async function useDeviceModel(path: string) {
@@ -380,22 +382,48 @@ function OnDeviceModelSection() {
             </div>
           )}
 
-          {/* Import tab */}
-          {tab === 'import' && (
-            <div className="mt-3 space-y-2">
-              <p className="text-xs text-amber-400/60">
-                Pick a <code>.litertlm</code> file from your device — the app will copy it to internal storage.
-              </p>
-              <button
-                type="button"
-                onClick={() => void importFromDevice()}
-                disabled={progress !== null}
-                className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {progress !== null ? 'Copying…' : 'Pick file…'}
-              </button>
-            </div>
-          )}
+          {/* Import tab — scans Downloads for .litertlm files and copies to internal storage */}
+          {tab === 'import' && (() => {
+            const downloadModels = deviceModels.filter((m) => m.name.startsWith('Downloads'));
+            return (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-amber-400/60">
+                  Download a <code>.litertlm</code> model to your Downloads folder, then tap Copy to install it.
+                </p>
+                {downloadModels.length === 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-amber-500/60">No .litertlm files found in Downloads.</p>
+                    <button
+                      type="button"
+                      onClick={() => void rescanDeviceModels()}
+                      className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 transition"
+                    >
+                      Scan again
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {downloadModels.map((m) => (
+                      <div key={m.path} className="flex items-center justify-between gap-2 rounded-md border border-amber-700/40 px-3 py-2">
+                        <div>
+                          <div className="text-xs text-amber-100">{m.name.replace('Downloads: ', '')}</div>
+                          <div className="text-[10px] text-amber-400/60">{fmtMb(m.sizeBytes)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void importFromPath(m.path)}
+                          disabled={progress !== null}
+                          className="shrink-0 rounded-md border border-amber-700/40 px-3 py-1 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 transition"
+                        >
+                          {progress !== null ? 'Copying…' : 'Copy'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* On-device tab (AI Edge Gallery / Pixel) */}
           {tab === 'device' && (

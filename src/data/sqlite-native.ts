@@ -133,3 +133,14 @@ export async function loadDataIndexFromNativeSqlite(): Promise<DataIndex> {
 
   return buildDataIndex(ingredients, aliases, substitutes, recipes);
 }
+
+export async function getDbMeta(): Promise<Record<string, string>> {
+  const db = await openNativeDb();
+  const rows = await queryAll<{ key: string; value: string }>(
+    db,
+    'SELECT key, value FROM db_meta',
+  );
+  const out: Record<string, string> = {};
+  for (const r of rows) out[r.key] = r.value;
+  return out;
+}

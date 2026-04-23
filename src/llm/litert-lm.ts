@@ -69,6 +69,7 @@ export interface LiteRtLmPlugin {
   deleteModel(): Promise<void>;
   generate(opts: GenerateOptions): Promise<GenerateResult>;
   importModelFile(): Promise<{ path: string }>;
+  importModelFromPath(opts: { path: string }): Promise<{ path: string }>;
   detectDeviceModels(): Promise<{ models: DeviceModel[] }>;
   hasAllFilesAccess(): Promise<{ granted: boolean }>;
   requestAllFilesAccess(): Promise<void>;

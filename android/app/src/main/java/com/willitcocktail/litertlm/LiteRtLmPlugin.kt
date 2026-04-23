@@ -165,25 +165,54 @@ class LiteRtLmPlugin : Plugin() {
         val arr = JSONArray()
         val hasAccess = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
             Environment.isExternalStorageManager()
-        if (hasAccess) {
-            val searchRoots = listOf(
-                File("/sdcard/Android/data/com.google.ai.edge.gallery/files"),
-                File("/sdcard/Android/data/com.google.aiedge.gallery/files"),
-            )
-            for (root in searchRoots) {
-                if (!root.exists()) continue
-                root.walkTopDown()
-                    .filter { it.isFile && it.name.endsWith(".litertlm") }
-                    .forEach { f ->
-                        arr.put(JSObject().apply {
-                            put("path", f.absolutePath)
-                            put("name", f.parentFile?.parentFile?.name ?: f.nameWithoutExtension)
-                            put("sizeBytes", f.length())
-                        })
-                    }
-            }
+
+        fun scanDir(root: File, namePrefix: String) {
+            if (!root.exists()) return
+            root.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".litertlm") }
+                .forEach { f ->
+                    arr.put(JSObject().apply {
+                        put("path", f.absolutePath)
+                        put("name", "$namePrefix: ${f.parentFile?.name ?: f.nameWithoutExtension}")
+                        put("sizeBytes", f.length())
+                    })
+                }
         }
+
+        if (hasAccess) {
+            scanDir(File("/sdcard/Android/data/com.google.ai.edge.gallery/files"), "AI Edge Gallery")
+            scanDir(File("/sdcard/Android/data/com.google.aiedge.gallery/files"), "AI Edge Gallery")
+        }
+        // Downloads is accessible without special permission via copy-from-path
+        scanDir(File("/sdcard/Download"), "Downloads")
+
         call.resolve(JSObject().apply { put("models", arr) })
+    }
+
+    @PluginMethod
+    fun importModelFromPath(call: PluginCall) {
+        val path = call.getString("path")
+        if (path.isNullOrBlank()) {
+            call.reject("path is required")
+            return
+        }
+        engine.importFromPath(
+            File(path),
+            onProgress = { bytes, total ->
+                notifyListeners("importProgress", JSObject().apply {
+                    put("bytesWritten", bytes)
+                    put("totalBytes", total)
+                })
+            },
+            onComplete = { result ->
+                result.onSuccess { p ->
+                    call.resolve(JSObject().apply { put("path", p) })
+                }
+                result.onFailure { err ->
+                    call.reject(err.message ?: "import failed", Exception(err))
+                }
+            },
+        )
     }
 
     // --- All-files-access permission -----------------------------------------
