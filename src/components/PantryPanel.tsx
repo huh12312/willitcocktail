@@ -213,12 +213,8 @@ function GroupedIngredients({
   add: (id: string) => void;
   remove: (id: string) => void;
 }) {
-  const hasItemInPantry = (g: PantryGroup) =>
-    (grouped.get(g) ?? []).some((i) => pantrySet.has(i.id));
-
-  // Start open if the group has any pantry items, closed otherwise.
   const [collapsed, setCollapsed] = useState<Set<PantryGroup>>(
-    () => new Set(GROUP_ORDER.filter((g) => !hasItemInPantry(g))),
+    () => new Set(GROUP_ORDER),
   );
 
   function toggle(g: PantryGroup) {
