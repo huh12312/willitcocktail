@@ -188,16 +188,75 @@ export function PantryPanel() {
         )}
       </div>
 
-      <div className="flex flex-col gap-5">
-        {GROUP_ORDER.map((g) => {
-          const items = grouped.get(g) ?? [];
-          if (items.length === 0) return null;
-          return (
-            <div key={g}>
-              <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">
+      <GroupedIngredients grouped={grouped} pantrySet={pantrySet} add={add} remove={remove} />
+      {filtered.length === 0 && (
+        <div className="text-amber-400/60 text-sm py-8 text-center">
+          {ingredients.length === 0
+            ? 'Your pantry is empty. Tap "Browse all" or search to add ingredients.'
+            : 'No ingredients match your search.'}
+        </div>
+      )}
+
+      <CustomIngredientsSection />
+    </div>
+  );
+}
+
+function GroupedIngredients({
+  grouped,
+  pantrySet,
+  add,
+  remove,
+}: {
+  grouped: Map<PantryGroup, Ingredient[]>;
+  pantrySet: Set<string>;
+  add: (id: string) => void;
+  remove: (id: string) => void;
+}) {
+  const hasItemInPantry = (g: PantryGroup) =>
+    (grouped.get(g) ?? []).some((i) => pantrySet.has(i.id));
+
+  // Start open if the group has any pantry items, closed otherwise.
+  const [collapsed, setCollapsed] = useState<Set<PantryGroup>>(
+    () => new Set(GROUP_ORDER.filter((g) => !hasItemInPantry(g))),
+  );
+
+  function toggle(g: PantryGroup) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g); else next.add(g);
+      return next;
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      {GROUP_ORDER.map((g) => {
+        const items = grouped.get(g) ?? [];
+        if (items.length === 0) return null;
+        const open = !collapsed.has(g);
+        const inPantryCount = items.filter((i) => pantrySet.has(i.id)).length;
+        return (
+          <div key={g} className="border-b border-amber-800/20 last:border-0 pb-1">
+            <button
+              type="button"
+              onClick={() => toggle(g)}
+              className="w-full flex items-center justify-between py-2 group"
+            >
+              <span className="text-xs uppercase tracking-wider text-amber-400/60 group-hover:text-amber-300/80 transition">
                 {GROUP_LABEL[g]}
-              </h3>
-              <div className="flex flex-wrap gap-2">
+              </span>
+              <span className="flex items-center gap-2">
+                {inPantryCount > 0 && (
+                  <span className="text-[10px] rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2 py-0.5">
+                    {inPantryCount}
+                  </span>
+                )}
+                <span className="text-amber-400/40 text-xs">{open ? '▲' : '▼'}</span>
+              </span>
+            </button>
+            {open && (
+              <div className="flex flex-wrap gap-2 pb-3">
                 {items.map((i) => {
                   const inPantry = pantrySet.has(i.id);
                   return (
@@ -218,19 +277,10 @@ export function PantryPanel() {
                   );
                 })}
               </div>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <div className="text-amber-400/60 text-sm py-8 text-center">
-            {ingredients.length === 0
-              ? 'Your pantry is empty. Tap "Browse all" or search to add ingredients.'
-              : 'No ingredients match your search.'}
+            )}
           </div>
-        )}
-      </div>
-
-      <CustomIngredientsSection />
+        );
+      })}
     </div>
   );
 }
