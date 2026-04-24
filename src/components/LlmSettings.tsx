@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { LLM_PRESETS, activeProviderId, isCloudConfigured, useLlmSettings } from '../llm';
+import { LLM_PRESETS, isCloudConfigured, useLlmSettings } from '../llm';
 import { useSnapshotStatus } from '../store/snapshot-status';
 import { checkAndInstallSnapshot, snapshotConfigFromEnv } from '../data/snapshot';
 import { useLitertLmConfig } from '../store/litertlm-config';
@@ -14,6 +14,7 @@ interface LlmSettingsProps {
 export function LlmSettings({ open, onClose }: LlmSettingsProps) {
   const { choice, cloud, setChoice, setCloud, applyPreset } = useLlmSettings();
   const [showKey, setShowKey] = useState(false);
+  const [onDeviceActive, setOnDeviceActive] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -155,7 +156,7 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
           </p>
         </section>
 
-        <OnDeviceModelSection />
+        <OnDeviceModelSection onActiveChange={setOnDeviceActive} />
 
         <DbSnapshotSection />
 
@@ -170,10 +171,10 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
                 ? <span className="text-emerald-400">Cloud configured.</span>
                 : <span className="text-rose-300/80">Cloud not configured — falling back to heuristic.</span>
             ) : (
-              // auto: show the provider that will actually be used
-              activeProviderId() === 'litert-lm'
+              // auto: reflect actual active backend (AICore, downloaded, or copied)
+              onDeviceActive
                 ? <span className="text-emerald-400">On-device model active.</span>
-                : activeProviderId() === 'cloud'
+                : configured
                   ? <span className="text-emerald-400">Cloud configured.</span>
                   : <span className="text-amber-400/70">No model configured — using offline heuristic.</span>
             )}
@@ -191,7 +192,7 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
   );
 }
 
-function OnDeviceModelSection() {
+function OnDeviceModelSection({ onActiveChange }: { onActiveChange?: (active: boolean) => void }) {
   const { modelUrl, expectedSha256, setModelUrl, setExpectedSha256 } =
     useLitertLmConfig();
   const [status, setStatus] = useState<ModelStatus | null>(null);
@@ -203,6 +204,12 @@ function OnDeviceModelSection() {
   const [deviceModels, setDeviceModels] = useState<import('../llm/litert-lm').DeviceModel[]>([]);
   const plugin = getLiteRtLmPlugin();
   const native = Capacitor.isNativePlatform();
+
+  // Report combined active state to parent whenever either status changes.
+  useEffect(() => {
+    const active = aiCoreStatus?.status === 'available' || status?.ready === true;
+    onActiveChange?.(active);
+  }, [aiCoreStatus, status, onActiveChange]);
 
   useEffect(() => {
     if (!plugin) return;
