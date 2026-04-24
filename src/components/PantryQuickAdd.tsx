@@ -20,6 +20,7 @@ const CATEGORY_OPTIONS: { value: IngredientCategory; label: string }[] = [
 export function PantryQuickAdd() {
   const data = useData();
   const add = usePantry((s) => s.add);
+  const has = usePantry((s) => s.has);
   const { add: addCustom } = useCustomIngredients();
   const [text, setText] = useState('');
   const [parsed, setParsed] = useState<ParsedPantry | null>(null);
@@ -133,27 +134,48 @@ export function PantryQuickAdd() {
               <div className="flex flex-wrap gap-2">
                 {parsed.resolved.map((r) => {
                   const added = confirmedIds.has(r.ingredientId);
+                  const inPantry = has(r.ingredientId);
+                  const lowConf = r.confidence < 0.85;
+                  // Offer "add as custom" when the match is fuzzy or the
+                  // resolved ingredient is already in the pantry (meaning the
+                  // user likely meant a distinct product, e.g. "walnut bitters"
+                  // matching angostura at 75% when angostura is already stocked).
+                  const offerCustom = !added && (lowConf || inPantry);
                   return (
-                    <button
-                      key={r.ingredientId}
-                      type="button"
-                      onClick={() => addOne(r.ingredientId)}
-                      disabled={added}
-                      className={[
-                        'px-3 py-1.5 rounded-full text-sm border transition',
-                        added
-                          ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40 cursor-default'
-                          : 'bg-amber-900/20 border-amber-700/40 text-amber-100 hover:border-amber-500',
-                      ].join(' ')}
-                    >
-                      {added ? '✓ ' : '+ '}
-                      {r.ingredientName}
-                      {r.confidence < 0.9 && (
-                        <span className="ml-1 text-[10px] opacity-60">
-                          ~{Math.round(r.confidence * 100)}%
-                        </span>
+                    <div key={r.ingredientId} className="flex flex-col items-start gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => { if (!inPantry) addOne(r.ingredientId); }}
+                        disabled={added || inPantry}
+                        className={[
+                          'px-3 py-1.5 rounded-full text-sm border transition',
+                          added || inPantry
+                            ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40 cursor-default'
+                            : 'bg-amber-900/20 border-amber-700/40 text-amber-100 hover:border-amber-500',
+                        ].join(' ')}
+                      >
+                        {added || inPantry ? '✓ ' : '+ '}
+                        {r.ingredientName}
+                        {r.confidence < 0.9 && (
+                          <span className="ml-1 text-[10px] opacity-60">
+                            ~{Math.round(r.confidence * 100)}%
+                          </span>
+                        )}
+                      </button>
+                      {offerCustom && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPendingCustom(
+                              pendingCustom?.phrase === r.input ? null : { phrase: r.input, category: 'bitter' },
+                            )
+                          }
+                          className="text-[10px] text-amber-400/60 hover:text-amber-300 transition pl-1"
+                        >
+                          add "{r.input}" as custom instead
+                        </button>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -187,45 +209,47 @@ export function PantryQuickAdd() {
                 ))}
               </div>
 
-              {pendingCustom && (
-                <div className="mt-3 rounded-md border border-amber-600/40 bg-amber-900/20 p-3 flex flex-col gap-2">
-                  <div className="text-xs text-amber-300/80">
-                    Add <span className="font-semibold text-amber-100">{pendingCustom.phrase}</span> as a custom ingredient:
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <select
-                      value={pendingCustom.category}
-                      onChange={(e) =>
-                        setPendingCustom({ ...pendingCustom, category: e.target.value as IngredientCategory })
-                      }
-                      className="rounded-md bg-amber-950/40 border border-amber-700/40 px-2 py-1.5 text-sm text-amber-100 focus:outline-none focus:border-amber-500"
-                    >
-                      {CATEGORY_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={confirmCustom}
-                      className="rounded-md bg-amber-500 text-amber-950 px-3 py-1.5 text-sm font-medium hover:bg-amber-400 transition"
-                    >
-                      Add to pantry
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPendingCustom(null)}
-                      className="text-xs text-amber-400/60 hover:text-amber-300 transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           {parsed.resolved.length === 0 && parsed.unresolved.length === 0 && (
             <div className="text-xs text-amber-400/70">No ingredients recognized.</div>
+          )}
+
+          {/* Custom ingredient form — shown when triggered from either resolved or unresolved items */}
+          {pendingCustom && (
+            <div className="rounded-md border border-amber-600/40 bg-amber-900/20 p-3 flex flex-col gap-2">
+              <div className="text-xs text-amber-300/80">
+                Add <span className="font-semibold text-amber-100">{pendingCustom.phrase}</span> as a custom ingredient:
+              </div>
+              <div className="flex gap-2 items-center flex-wrap">
+                <select
+                  value={pendingCustom.category}
+                  onChange={(e) =>
+                    setPendingCustom({ ...pendingCustom, category: e.target.value as IngredientCategory })
+                  }
+                  className="rounded-md bg-amber-950/40 border border-amber-700/40 px-2 py-1.5 text-sm text-amber-100 focus:outline-none focus:border-amber-500"
+                >
+                  {CATEGORY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={confirmCustom}
+                  className="rounded-md bg-amber-500 text-amber-950 px-3 py-1.5 text-sm font-medium hover:bg-amber-400 transition"
+                >
+                  Add to pantry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingCustom(null)}
+                  className="text-xs text-amber-400/60 hover:text-amber-300 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
