@@ -529,6 +529,7 @@ function DbSnapshotSection() {
     useSnapshotStatus();
   const [checking, setChecking] = useState(false);
   const cfg = snapshotConfigFromEnv();
+  const native = Capacitor.isNativePlatform();
 
   async function checkNow() {
     if (!cfg) return;
@@ -551,44 +552,54 @@ function DbSnapshotSection() {
           Current version:{' '}
           <span className="font-mono text-amber-300">{currentVersion ?? '—'}</span>
         </div>
-        {pendingVersion && pendingVersion !== currentVersion && (
-          <div className="text-emerald-300">
-            New snapshot{' '}
-            <span className="font-mono">{pendingVersion}</span> installed —
-            reload the page to apply.
-          </div>
-        )}
-        {lastCheckedAt && (
+        {native ? (
           <div className="text-amber-400/60">
-            Last checked {new Date(lastCheckedAt).toLocaleString()}
+            Database is bundled with the app — updates arrive via app install.
           </div>
-        )}
-        {lastError && <div className="text-rose-300/80">Error: {lastError}</div>}
-        {!cfg && (
-          <div className="text-amber-400/60">
-            Remote sync disabled — set <code>VITE_SNAPSHOT_URL</code> at build time.
-          </div>
+        ) : (
+          <>
+            {pendingVersion && pendingVersion !== currentVersion && (
+              <div className="text-emerald-300">
+                New snapshot{' '}
+                <span className="font-mono">{pendingVersion}</span> installed —
+                reload the page to apply.
+              </div>
+            )}
+            {lastCheckedAt && (
+              <div className="text-amber-400/60">
+                Last checked {new Date(lastCheckedAt).toLocaleString()}
+              </div>
+            )}
+            {lastError && <div className="text-rose-300/80">Error: {lastError}</div>}
+            {!cfg && (
+              <div className="text-amber-400/60">
+                Remote sync disabled — set <code>VITE_SNAPSHOT_URL</code> at build time.
+              </div>
+            )}
+          </>
         )}
       </div>
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={() => void checkNow()}
-          disabled={!cfg || checking}
-          className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {checking ? 'Checking…' : 'Check for updates'}
-        </button>
-        {pendingVersion && pendingVersion !== currentVersion && (
+      {!native && (
+        <div className="mt-3 flex gap-2">
           <button
             type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-md bg-emerald-500/20 border border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/30 transition"
+            onClick={() => void checkNow()}
+            disabled={!cfg || checking}
+            className="rounded-md border border-amber-700/40 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
-            Reload to apply
+            {checking ? 'Checking…' : 'Check for updates'}
           </button>
-        )}
-      </div>
+          {pendingVersion && pendingVersion !== currentVersion && (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-md bg-emerald-500/20 border border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/30 transition"
+            >
+              Reload to apply
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }
