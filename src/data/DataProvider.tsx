@@ -4,6 +4,7 @@ import type { DataIndex } from './index';
 import { loadDataIndex } from './loader';
 import { checkAndInstallSnapshot, snapshotConfigFromEnv } from './snapshot';
 import { useCustomRecipes } from '../store/custom-recipes';
+import { useCustomIngredients } from '../store/custom-ingredients';
 import { useSnapshotStatus } from '../store/snapshot-status';
 import { Capacitor } from '@capacitor/core';
 
@@ -20,6 +21,7 @@ interface DataProviderProps {
 export function DataProvider({ children, fallback }: DataProviderProps) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const customRecipes = useCustomRecipes((s) => s.recipes);
+  const customIngredients = useCustomIngredients((s) => s.ingredients);
   const setCurrent = useSnapshotStatus((s) => s.setCurrent);
   const clearPending = useSnapshotStatus((s) => s.clearPending);
   const applySync = useSnapshotStatus((s) => s.applySync);
@@ -69,13 +71,38 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
 
   const merged = useMemo(() => {
     if (state.status !== 'ready') return null;
-    if (customRecipes.length === 0) return state.data;
-    // Spread into a new DataIndex so consumers see a stable reference change.
+    if (customRecipes.length === 0 && customIngredients.length === 0) return state.data;
+
+    // Merge custom ingredients into the DataIndex so the matcher, alias
+    // resolver, and LLM prompts all treat them as first-class ingredients.
+    const extraIngredients = customIngredients.map((ci) => ({
+      id: ci.id,
+      name: ci.name,
+      category: ci.category,
+    }));
+    const ingredientById = new Map(state.data.ingredientById);
+    const aliasMap = new Map(state.data.aliasMap);
+    const descendants = new Map(state.data.descendants);
+    const ancestors = new Map(state.data.ancestors);
+    for (const ing of extraIngredients) {
+      ingredientById.set(ing.id, ing);
+      // Humanized name as alias so the heuristic resolver can match it.
+      aliasMap.set(ing.name.toLowerCase(), ing.id);
+      // Leaf nodes: only contain themselves in hierarchy maps.
+      descendants.set(ing.id, new Set([ing.id]));
+      ancestors.set(ing.id, new Set([ing.id]));
+    }
+
     return {
       ...state.data,
+      ingredients: [...state.data.ingredients, ...extraIngredients],
+      ingredientById,
+      aliasMap,
+      descendants,
+      ancestors,
       recipes: [...state.data.recipes, ...customRecipes],
     };
-  }, [state, customRecipes]);
+  }, [state, customRecipes, customIngredients]);
 
   if (state.status === 'loading' || !merged) {
     return <>{fallback ?? <LoadingSplash />}</>;

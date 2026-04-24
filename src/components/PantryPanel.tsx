@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
+import { useCustomIngredients, toCustomIngredientId, type CustomIngredient } from '../store/custom-ingredients';
 import { PantryQuickAdd } from './PantryQuickAdd';
-import type { Ingredient } from '../types';
+import type { Ingredient, IngredientCategory } from '../types';
 
 type PantryGroup =
   | 'spirit'
@@ -228,6 +229,108 @@ export function PantryPanel() {
           </div>
         )}
       </div>
+
+      <CustomIngredientsSection />
+    </div>
+  );
+}
+
+const CATEGORY_OPTIONS: { value: IngredientCategory; label: string }[] = [
+  { value: 'spirit',  label: 'Spirit'  },
+  { value: 'liqueur', label: 'Liqueur' },
+  { value: 'wine',    label: 'Wine'    },
+  { value: 'mixer',   label: 'Mixer'   },
+  { value: 'juice',   label: 'Juice'   },
+  { value: 'syrup',   label: 'Syrup'   },
+  { value: 'bitter',  label: 'Bitter'  },
+  { value: 'other',   label: 'Other'   },
+];
+
+function CustomIngredientsSection() {
+  const { add: addToPantry, remove: removeFromPantry, has } = usePantry();
+  const { ingredients: custom, add: addCustom, remove: removeCustom } = useCustomIngredients();
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState<IngredientCategory>('spirit');
+
+  function submit() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const id = toCustomIngredientId(trimmed);
+    const ing: CustomIngredient = { id, name: trimmed, category };
+    addCustom(ing);
+    addToPantry(id);
+    setName('');
+  }
+
+  return (
+    <div className="mt-6 pt-5 border-t border-amber-800/30">
+      <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-3">
+        Custom ingredients
+      </h3>
+
+      {/* Add form */}
+      <div className="flex gap-2 mb-3">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          placeholder="e.g. Uncle Nearest 1856"
+          className="flex-1 rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 text-sm text-amber-100 placeholder:text-amber-500/50 focus:outline-none focus:border-amber-500"
+        />
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as IngredientCategory)}
+          className="rounded-md bg-amber-950/40 border border-amber-700/40 px-2 py-1.5 text-sm text-amber-100 focus:outline-none focus:border-amber-500"
+        >
+          {CATEGORY_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!name.trim()}
+          className="rounded-md bg-amber-500 text-amber-950 px-3 py-1.5 text-sm font-medium disabled:opacity-40 hover:bg-amber-400 transition"
+        >
+          Add
+        </button>
+      </div>
+
+      {/* Existing custom ingredients */}
+      {custom.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {custom.map((ing) => {
+            const inPantry = has(ing.id);
+            return (
+              <div key={ing.id} className="flex items-center gap-1 rounded-full border border-amber-600/50 bg-amber-900/30 pl-3 pr-1 py-1">
+                <button
+                  type="button"
+                  onClick={() => inPantry ? removeFromPantry(ing.id) : addToPantry(ing.id)}
+                  className="text-sm text-amber-100 hover:text-amber-300 transition"
+                >
+                  {inPantry ? '✓ ' : '+ '}{ing.name}
+                </button>
+                <span className="text-[10px] text-amber-400/50 ml-1">{ing.category}</span>
+                <button
+                  type="button"
+                  onClick={() => { removeCustom(ing.id); removeFromPantry(ing.id); }}
+                  className="ml-1 text-amber-500/60 hover:text-rose-300 transition text-xs leading-none"
+                  aria-label={`Remove ${ing.name}`}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {custom.length === 0 && (
+        <p className="text-xs text-amber-400/50">
+          Add spirits, liqueurs, or other ingredients not in the standard list.
+        </p>
+      )}
     </div>
   );
 }
