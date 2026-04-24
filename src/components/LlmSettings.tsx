@@ -207,7 +207,7 @@ function OnDeviceModelSection({ onActiveChange }: { onActiveChange?: (active: bo
 
   // Report combined active state to parent whenever either status changes.
   useEffect(() => {
-    const active = aiCoreStatus?.status === 'available' || status?.ready === true;
+    const active = aiCoreStatus?.status === 'available' || status?.downloaded === true;
     onActiveChange?.(active);
   }, [aiCoreStatus, status, onActiveChange]);
 
