@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../data/source';
+import { useCustomRecipes } from '../store/custom-recipes';
 import { keyLiquor, liquorCounts } from '../data/recipe-utils';
 
 interface RecipesPanelProps {
@@ -10,6 +11,7 @@ const PAGE_SIZE = 100;
 
 export function RecipesPanel({ onSelect }: RecipesPanelProps) {
   const data = useData();
+  const removeCustom = useCustomRecipes((s) => s.remove);
   const [search, setSearch] = useState('');
   const [liquorFilter, setLiquorFilter] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -96,32 +98,49 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
       <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
         {displayed.map((recipe) => {
           const liquor = keyLiquor(recipe, data);
+          const isGenerated = recipe.source === 'generated';
           return (
-            <button
-              key={recipe.id}
-              type="button"
-              onClick={() => onSelect(recipe.id)}
-              className="text-left rounded-lg border border-amber-700/40 bg-amber-900/20 px-4 py-3 hover:border-amber-500 hover:bg-amber-900/40 transition"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-medium text-amber-100 text-sm leading-snug">{recipe.name}</span>
-                <div className="flex items-center gap-1 shrink-0">
-                  {liquor && (
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/40">
-                      {liquor.name}
-                    </span>
-                  )}
-                  {recipe.ibaOfficial && (
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                      IBA
-                    </span>
-                  )}
+            <div key={recipe.id} className="relative group">
+              <button
+                type="button"
+                onClick={() => onSelect(recipe.id)}
+                className="w-full text-left rounded-lg border border-amber-700/40 bg-amber-900/20 px-4 py-3 hover:border-amber-500 hover:bg-amber-900/40 transition"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-medium text-amber-100 text-sm leading-snug">{recipe.name}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isGenerated && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/40">
+                        Created
+                      </span>
+                    )}
+                    {liquor && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/40">
+                        {liquor.name}
+                      </span>
+                    )}
+                    {recipe.ibaOfficial && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        IBA
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="text-[11px] text-amber-400/60 mt-0.5 capitalize">
-                {recipe.family.replace('_', ' ')} · {recipe.method}
-              </div>
-            </button>
+                <div className="text-[11px] text-amber-400/60 mt-0.5 capitalize">
+                  {recipe.family.replace('_', ' ')} · {recipe.method}
+                </div>
+              </button>
+              {isGenerated && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeCustom(recipe.id); }}
+                  aria-label={`Delete ${recipe.name}`}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-rose-400/70 hover:text-rose-300 text-xs px-1.5 py-0.5 transition-opacity"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
