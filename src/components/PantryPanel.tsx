@@ -213,12 +213,11 @@ function GroupedIngredients({
   add: (id: string) => void;
   remove: (id: string) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<PantryGroup>>(
-    () => new Set(GROUP_ORDER),
-  );
+  // Track which groups are open — empty = all collapsed (the default).
+  const [openGroups, setOpenGroups] = useState<Set<PantryGroup>>(new Set());
 
   function toggle(g: PantryGroup) {
-    setCollapsed((prev) => {
+    setOpenGroups((prev) => {
       const next = new Set(prev);
       if (next.has(g)) next.delete(g); else next.add(g);
       return next;
@@ -230,7 +229,7 @@ function GroupedIngredients({
       {GROUP_ORDER.map((g) => {
         const items = grouped.get(g) ?? [];
         if (items.length === 0) return null;
-        const open = !collapsed.has(g);
+        const open = openGroups.has(g);
         const inPantryCount = items.filter((i) => pantrySet.has(i.id)).length;
         return (
           <div key={g} className="border-b border-amber-800/20 last:border-0 pb-1">
