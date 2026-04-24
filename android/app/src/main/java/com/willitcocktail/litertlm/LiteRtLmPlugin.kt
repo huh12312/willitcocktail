@@ -49,6 +49,7 @@ class LiteRtLmPlugin : Plugin() {
             put("ready", status.ready)
             status.path?.let { put("path", it) }
             status.sizeBytes?.let { put("sizeBytes", it) }
+            status.backend?.let { put("backend", it) }
         }
         call.resolve(out)
     }

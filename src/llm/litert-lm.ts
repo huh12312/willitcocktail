@@ -26,6 +26,7 @@ export interface ModelStatus {
   ready: boolean; // downloaded AND engine initialised
   path?: string;
   sizeBytes?: number;
+  backend?: 'gpu' | 'cpu'; // set once engine is initialised
 }
 
 export interface DownloadProgressEvent {

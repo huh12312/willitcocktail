@@ -32,12 +32,15 @@ class LiteRtEngine(private val appContext: Context) {
     private val engineRef = AtomicReference<Engine?>(null)
     @Volatile private var configuredUrl: String? = null
     @Volatile private var expectedSha256: String? = null
+    // Tracks which backend was selected at engine init time.
+    @Volatile private var activeBackend: String? = null
 
     data class Status(
         val downloaded: Boolean,
         val ready: Boolean,
         val path: String?,
         val sizeBytes: Long?,
+        val backend: String?,    // "gpu" | "cpu" | null when not yet initialised
     )
 
     data class GenerateOutput(
@@ -78,6 +81,7 @@ class LiteRtEngine(private val appContext: Context) {
             ready = ready,
             path = if (downloaded) f.absolutePath else null,
             sizeBytes = if (downloaded) f.length() else null,
+            backend = if (ready) activeBackend else null,
         )
     }
 
@@ -288,16 +292,31 @@ class LiteRtEngine(private val appContext: Context) {
         if (!f.exists()) {
             throw IllegalStateException("model not downloaded — call downloadModel first")
         }
-        val config = EngineConfig(
-            modelPath = f.absolutePath,
-            backend = Backend.CPU(),
-            maxNumTokens = maxTokens.coerceAtLeast(256),
-            cacheDir = appContext.cacheDir.absolutePath,
+        // Try GPU first (2-3× throughput vs CPU on Adreno/Mali/PowerVR).
+        // Fall back to CPU if the GPU backend fails to initialise.
+        val backends = listOf<Pair<Backend, String>>(
+            Backend.GPU() to "gpu",
+            Backend.CPU() to "cpu",
         )
-        val eng = Engine(config)
-        eng.initialize()
-        engineRef.set(eng)
-        return eng
+        for ((backend, label) in backends) {
+            try {
+                val config = EngineConfig(
+                    modelPath = f.absolutePath,
+                    backend = backend,
+                    maxNumTokens = maxTokens.coerceAtLeast(256),
+                    cacheDir = appContext.cacheDir.absolutePath,
+                )
+                val eng = Engine(config)
+                eng.initialize()
+                engineRef.set(eng)
+                activeBackend = label
+                Log.i(tag, "Engine initialised on $label backend")
+                return eng
+            } catch (t: Throwable) {
+                Log.w(tag, "$label backend failed: ${t.message} — trying next")
+            }
+        }
+        throw RuntimeException("All backends failed for model at ${f.absolutePath}")
     }
 
     // --- Cleanup ---------------------------------------------------------

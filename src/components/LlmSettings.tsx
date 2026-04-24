@@ -344,6 +344,11 @@ function OnDeviceModelSection({ onActiveChange }: { onActiveChange?: (active: bo
               <span className="font-mono text-amber-300">
                 {status?.ready ? 'ready' : status?.downloaded ? 'downloaded' : 'not downloaded'}
               </span>
+              {status?.backend && (
+                <span className="ml-2 text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 border bg-amber-900/40 border-amber-700/40 text-amber-300/70">
+                  {status.backend}
+                </span>
+              )}
               {status?.sizeBytes != null && (
                 <span className="text-amber-400/60 ml-2">({fmtMb(status.sizeBytes)})</span>
               )}
