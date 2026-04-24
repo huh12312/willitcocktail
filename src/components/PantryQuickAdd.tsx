@@ -170,9 +170,14 @@ export function PantryQuickAdd() {
                               pendingCustom?.phrase === r.input ? null : { phrase: r.input, category: 'bitter' },
                             )
                           }
-                          className="text-[10px] text-amber-400/60 hover:text-amber-300 transition pl-1"
+                          className={[
+                            'text-[10px] rounded-full border px-2 py-0.5 transition',
+                            pendingCustom?.phrase === r.input
+                              ? 'border-amber-500 bg-amber-900/40 text-amber-200'
+                              : 'border-amber-600/40 text-amber-400 hover:border-amber-400 hover:text-amber-200',
+                          ].join(' ')}
                         >
-                          add "{r.input}" as custom instead
+                          + custom: {r.input}
                         </button>
                       )}
                     </div>
