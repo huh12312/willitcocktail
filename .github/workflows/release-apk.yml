@@ -1,6 +1,9 @@
 name: release-apk
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
@@ -15,9 +18,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          echo "value=$TAG" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ steps.tag.outputs.value }}
 
       - uses: actions/setup-node@v4
         with:
@@ -57,14 +66,14 @@ jobs:
 
       - name: Rename APK
         run: |
-          TAG="${{ inputs.tag }}"
+          TAG="${{ steps.tag.outputs.value }}"
           cp android/app/build/outputs/apk/release/app-release.apk \
              "willitcocktail-${TAG}.apk"
           echo "APK_PATH=willitcocktail-${TAG}.apk" >> "$GITHUB_ENV"
 
       - name: Attach APK to release
         run: |
-          gh release upload "${{ inputs.tag }}" "${{ env.APK_PATH }}" \
+          gh release upload "${{ steps.tag.outputs.value }}" "${{ env.APK_PATH }}" \
             --repo "${{ github.repository }}" \
             --clobber
         env:
