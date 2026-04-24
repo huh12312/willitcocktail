@@ -593,12 +593,11 @@ const POLISH_SCHEMA = JSON.stringify({
 // --- Invent prompt & schema -------------------------------------------------
 
 function buildInventPrompt(query: string, pantryIds: string[], data: DataIndex): string {
+  // List IDs only — showing the display name alongside confuses the model
+  // into using the display name ("Fresh Basil") as the ingredient_id instead
+  // of the canonical ID ("basil"), which then fails the ID lookup filter.
   const pantryLines = pantryIds
-    .map((id) => {
-      const ing = data.ingredientById.get(id);
-      return ing ? `${id} (${ing.name}, ${ing.category})` : null;
-    })
-    .filter(Boolean)
+    .filter((id) => data.ingredientById.has(id))
     .join(', ');
 
   return [

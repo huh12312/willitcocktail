@@ -276,6 +276,15 @@ export function AskPanel({ onSelect }: AskPanelProps) {
   );
 }
 
+function humanizeInstructions(text: string, data: ReturnType<typeof useData>): string {
+  // Replace canonical snake_case IDs in model-generated instructions with
+  // their human-readable display names (e.g. "gin_london_dry" → "London Dry Gin").
+  return text.replace(/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g, (match) => {
+    const ing = data.ingredientById.get(match);
+    return ing ? ing.name : match;
+  });
+}
+
 function CollapsibleSection({
   title,
   loading,
@@ -444,7 +453,9 @@ function InventedRecipeModal({
         {inv.instructions && (
           <div className="mb-4">
             <h3 className="text-xs uppercase tracking-wider text-amber-400/60 mb-2">Instructions</h3>
-            <p className="text-sm text-amber-100/90 leading-relaxed">{inv.instructions}</p>
+            <p className="text-sm text-amber-100/90 leading-relaxed">
+              {humanizeInstructions(inv.instructions, data)}
+            </p>
           </div>
         )}
 
