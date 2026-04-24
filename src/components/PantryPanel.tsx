@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
+import { useCustomIngredients } from '../store/custom-ingredients';
 import { PantryQuickAdd } from './PantryQuickAdd';
 import type { Ingredient } from '../types';
 
@@ -211,6 +212,7 @@ function GroupedIngredients({
   add: (id: string) => void;
   remove: (id: string) => void;
 }) {
+  const { remove: removeCustom } = useCustomIngredients();
   // Track which groups are open — all start open.
   const [openGroups, setOpenGroups] = useState<Set<PantryGroup>>(() => new Set(GROUP_ORDER));
 
@@ -252,6 +254,29 @@ function GroupedIngredients({
               <div className="flex flex-wrap gap-2 pb-3">
                 {items.map((i) => {
                   const inPantry = pantrySet.has(i.id);
+                  if (i.custom) {
+                    // Custom ingredients show inline with a ✕ to delete them entirely.
+                    return (
+                      <div key={i.id} className={[
+                        'flex items-center gap-1 rounded-full border text-sm transition pl-3 pr-1 py-1',
+                        inPantry
+                          ? 'bg-amber-500 text-amber-950 border-amber-400'
+                          : 'bg-amber-900/20 border-amber-700/40 text-amber-100',
+                      ].join(' ')}>
+                        <button type="button" onClick={() => (inPantry ? remove(i.id) : add(i.id))}>
+                          {inPantry ? '✓ ' : '+ '}{i.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { removeCustom(i.id); remove(i.id); }}
+                          className="ml-1 opacity-60 hover:opacity-100 transition text-xs leading-none px-1"
+                          aria-label={`Remove ${i.name}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  }
                   return (
                     <button
                       key={i.id}

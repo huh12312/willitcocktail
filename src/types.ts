@@ -39,6 +39,7 @@ export interface Ingredient {
   name: string;
   category: IngredientCategory;
   parentId?: string;
+  custom?: boolean; // true for user-defined ingredients not in the canonical DB
 }
 
 export interface IngredientAlias {

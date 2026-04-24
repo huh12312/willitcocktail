@@ -75,11 +75,13 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
 
     // Merge custom ingredients into the DataIndex so the matcher, alias
     // resolver, and LLM prompts all treat them as first-class ingredients.
-    const extraIngredients = customIngredients.map((ci) => ({
-      id: ci.id,
-      name: ci.name,
-      category: ci.category,
-    }));
+    // custom:true lets the UI distinguish them without relying on a prefix.
+    // We skip any ID that already exists in the canonical DB — the canonical
+    // entry wins (e.g. if someone types "gin" as a custom ingredient).
+    const extraIngredients = customIngredients
+      .filter((ci) => !state.data.ingredientById.has(ci.id))
+      .map((ci) => ({ id: ci.id, name: ci.name, category: ci.category, custom: true as const }));
+
     const ingredientById = new Map(state.data.ingredientById);
     const aliasMap = new Map(state.data.aliasMap);
     const descendants = new Map(state.data.descendants);
@@ -87,7 +89,7 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
     for (const ing of extraIngredients) {
       ingredientById.set(ing.id, ing);
       // Humanized name as alias so the heuristic resolver can match it.
-      aliasMap.set(ing.name.toLowerCase(), ing.id);
+      if (!aliasMap.has(ing.name.toLowerCase())) aliasMap.set(ing.name.toLowerCase(), ing.id);
       // Leaf nodes: only contain themselves in hierarchy maps.
       descendants.set(ing.id, new Set([ing.id]));
       ancestors.set(ing.id, new Set([ing.id]));

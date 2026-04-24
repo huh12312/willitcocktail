@@ -8,15 +8,12 @@ export interface CustomIngredient {
   category: IngredientCategory;
 }
 
-/** Convert a user-typed name to a stable snake_case custom ID. */
+/** Convert a user-typed name to a stable snake_case ID (no prefix). */
 export function toCustomIngredientId(name: string): string {
-  return (
-    'custom_' +
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-  );
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 interface CustomIngredientsState {
