@@ -34,6 +34,9 @@ class LiteRtEngine(private val appContext: Context) {
     @Volatile private var expectedSha256: String? = null
     // Tracks which backend was selected at engine init time.
     @Volatile private var activeBackend: String? = null
+    // Set to false after a GPU inference failure so subsequent getOrCreate()
+    // calls skip GPU and go straight to CPU.
+    @Volatile private var allowGpu = true
 
     data class Status(
         val downloaded: Boolean,
@@ -269,20 +272,39 @@ class LiteRtEngine(private val appContext: Context) {
         executor.execute {
             try {
                 val eng = getOrCreate(maxTokens)
-                val conversation = eng.createConversation()
                 try {
-                    val message = conversation.sendMessage(prompt)
-                    val text = message.contents.contents
-                        .filterIsInstance<Content.Text>()
-                        .joinToString("") { it.text }
-                    onComplete(Result.success(GenerateOutput(text, null, "stop")))
-                } finally {
-                    conversation.close()
+                    onComplete(Result.success(runInference(eng, prompt)))
+                } catch (inferErr: Throwable) {
+                    // GPU can initialise successfully but fail at inference time
+                    // (OOM, unsupported op, driver crash). Demote to CPU and retry.
+                    if (activeBackend == "gpu") {
+                        Log.w(tag, "GPU inference failed (${inferErr.message}) — demoting to CPU")
+                        engineRef.getAndSet(null)?.close()
+                        activeBackend = null
+                        allowGpu = false
+                        val cpuEng = getOrCreate(maxTokens)
+                        onComplete(Result.success(runInference(cpuEng, prompt)))
+                    } else {
+                        throw inferErr
+                    }
                 }
             } catch (t: Throwable) {
                 Log.e(tag, "generate failed", t)
                 onComplete(Result.failure(t))
             }
+        }
+    }
+
+    private fun runInference(eng: Engine, prompt: String): GenerateOutput {
+        val conversation = eng.createConversation()
+        try {
+            val message = conversation.sendMessage(prompt)
+            val text = message.contents.contents
+                .filterIsInstance<Content.Text>()
+                .joinToString("") { it.text }
+            return GenerateOutput(text, null, "stop")
+        } finally {
+            conversation.close()
         }
     }
 
@@ -293,11 +315,12 @@ class LiteRtEngine(private val appContext: Context) {
             throw IllegalStateException("model not downloaded — call downloadModel first")
         }
         // Try GPU first (2-3× throughput vs CPU on Adreno/Mali/PowerVR).
-        // Fall back to CPU if the GPU backend fails to initialise.
-        val backends = listOf<Pair<Backend, String>>(
-            Backend.GPU() to "gpu",
-            Backend.CPU() to "cpu",
-        )
+        // Skip GPU if a previous inference failure already demoted us.
+        val backends = if (allowGpu) {
+            listOf(Backend.GPU() to "gpu", Backend.CPU() to "cpu")
+        } else {
+            listOf(Backend.CPU() to "cpu")
+        }
         for ((backend, label) in backends) {
             try {
                 val config = EngineConfig(
