@@ -2,6 +2,7 @@ package com.willitcocktail.litertlm
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
 import com.google.ai.edge.litertlm.Backend
@@ -32,11 +33,16 @@ class LiteRtEngine(private val appContext: Context) {
     private val engineRef = AtomicReference<Engine?>(null)
     @Volatile private var configuredUrl: String? = null
     @Volatile private var expectedSha256: String? = null
-    // Tracks which backend was selected at engine init time.
     @Volatile private var activeBackend: String? = null
-    // Set to false after a GPU inference failure so subsequent getOrCreate()
-    // calls skip GPU and go straight to CPU.
-    @Volatile private var allowGpu = true
+
+    private val prefs: SharedPreferences =
+        appContext.getSharedPreferences("litert_engine", Context.MODE_PRIVATE)
+
+    // Persisted across restarts: once GPU inference fails on this device we
+    // skip it permanently so there's no cold-start delay from a doomed attempt.
+    private var allowGpu: Boolean
+        get() = prefs.getBoolean("allow_gpu", true)
+        set(v) = prefs.edit().putBoolean("allow_gpu", v).apply()
 
     data class Status(
         val downloaded: Boolean,
