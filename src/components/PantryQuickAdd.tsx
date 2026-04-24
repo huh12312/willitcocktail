@@ -1,21 +1,38 @@
 import { useState } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
+import { useCustomIngredients, toCustomIngredientId, type CustomIngredient } from '../store/custom-ingredients';
 import { HeuristicProvider } from '../llm';
 import type { ParsedPantry } from '../llm';
+import type { IngredientCategory } from '../types';
+
+const CATEGORY_OPTIONS: { value: IngredientCategory; label: string }[] = [
+  { value: 'spirit',  label: 'Spirit'  },
+  { value: 'liqueur', label: 'Liqueur' },
+  { value: 'wine',    label: 'Wine'    },
+  { value: 'mixer',   label: 'Mixer'   },
+  { value: 'juice',   label: 'Juice'   },
+  { value: 'syrup',   label: 'Syrup'   },
+  { value: 'bitter',  label: 'Bitter'  },
+  { value: 'other',   label: 'Other'   },
+];
 
 export function PantryQuickAdd() {
   const data = useData();
   const add = usePantry((s) => s.add);
+  const { add: addCustom } = useCustomIngredients();
   const [text, setText] = useState('');
   const [parsed, setParsed] = useState<ParsedPantry | null>(null);
   const [loading, setLoading] = useState(false);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
+  // The unresolved phrase currently being set up as a custom ingredient.
+  const [pendingCustom, setPendingCustom] = useState<{ phrase: string; category: IngredientCategory } | null>(null);
 
   async function onParse() {
     if (!text.trim()) return;
     setLoading(true);
     setConfirmedIds(new Set());
+    setPendingCustom(null);
     try {
       const res = await new HeuristicProvider().parseIngredients(text, data);
       setParsed(res);
@@ -42,10 +59,26 @@ export function PantryQuickAdd() {
     setConfirmedIds((s) => new Set(s).add(id));
   }
 
+  function confirmCustom() {
+    if (!pendingCustom) return;
+    const id = toCustomIngredientId(pendingCustom.phrase);
+    const ing: CustomIngredient = { id, name: pendingCustom.phrase, category: pendingCustom.category };
+    addCustom(ing);
+    add(id);
+    // Mark as resolved in the UI so it shows confirmed.
+    setConfirmedIds((s) => new Set(s).add(id));
+    // Remove from the unresolved list.
+    setParsed((prev) =>
+      prev ? { ...prev, unresolved: prev.unresolved.filter((u) => u !== pendingCustom.phrase) } : prev,
+    );
+    setPendingCustom(null);
+  }
+
   function reset() {
     setText('');
     setParsed(null);
     setConfirmedIds(new Set());
+    setPendingCustom(null);
   }
 
   return (
@@ -126,23 +159,71 @@ export function PantryQuickAdd() {
               </div>
             </div>
           )}
+
           {parsed.unresolved.length > 0 && (
             <div>
               <div className="text-xs uppercase tracking-wider text-rose-300/80 mb-2">
-                Didn't recognize
+                Didn't recognize — tap to add as custom
               </div>
               <div className="flex flex-wrap gap-2">
                 {parsed.unresolved.map((u, i) => (
-                  <span
+                  <button
                     key={i}
-                    className="text-xs rounded-full border border-rose-500/30 px-2.5 py-1 text-rose-200/80"
+                    type="button"
+                    onClick={() =>
+                      setPendingCustom(
+                        pendingCustom?.phrase === u ? null : { phrase: u, category: 'spirit' },
+                      )
+                    }
+                    className={[
+                      'text-xs rounded-full border px-2.5 py-1 transition',
+                      pendingCustom?.phrase === u
+                        ? 'border-amber-500 bg-amber-900/40 text-amber-200'
+                        : 'border-rose-500/30 text-rose-200/80 hover:border-amber-500 hover:text-amber-200',
+                    ].join(' ')}
                   >
                     {u}
-                  </span>
+                  </button>
                 ))}
               </div>
+
+              {pendingCustom && (
+                <div className="mt-3 rounded-md border border-amber-600/40 bg-amber-900/20 p-3 flex flex-col gap-2">
+                  <div className="text-xs text-amber-300/80">
+                    Add <span className="font-semibold text-amber-100">{pendingCustom.phrase}</span> as a custom ingredient:
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <select
+                      value={pendingCustom.category}
+                      onChange={(e) =>
+                        setPendingCustom({ ...pendingCustom, category: e.target.value as IngredientCategory })
+                      }
+                      className="rounded-md bg-amber-950/40 border border-amber-700/40 px-2 py-1.5 text-sm text-amber-100 focus:outline-none focus:border-amber-500"
+                    >
+                      {CATEGORY_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={confirmCustom}
+                      className="rounded-md bg-amber-500 text-amber-950 px-3 py-1.5 text-sm font-medium hover:bg-amber-400 transition"
+                    >
+                      Add to pantry
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingCustom(null)}
+                      className="text-xs text-amber-400/60 hover:text-amber-300 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
           {parsed.resolved.length === 0 && parsed.unresolved.length === 0 && (
             <div className="text-xs text-amber-400/70">No ingredients recognized.</div>
           )}
