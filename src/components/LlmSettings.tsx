@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { LLM_PRESETS, isCloudConfigured, useLlmSettings } from '../llm';
+import { LLM_PRESETS, activeProviderId, isCloudConfigured, useLlmSettings } from '../llm';
 import { useSnapshotStatus } from '../store/snapshot-status';
 import { checkAndInstallSnapshot, snapshotConfigFromEnv } from '../data/snapshot';
 import { useLitertLmConfig } from '../store/litertlm-config';
@@ -165,10 +165,17 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
               <span className="text-amber-400/70">Offline heuristic selected.</span>
             ) : choice === 'litert-lm' ? (
               <span className="text-amber-400/70">On-device forced — falls back to heuristic if not ready.</span>
-            ) : configured ? (
-              <span className="text-emerald-400">Cloud configured.</span>
+            ) : choice === 'cloud' ? (
+              configured
+                ? <span className="text-emerald-400">Cloud configured.</span>
+                : <span className="text-rose-300/80">Cloud not configured — falling back to heuristic.</span>
             ) : (
-              <span className="text-rose-300/80">Cloud not configured — falling back to heuristic.</span>
+              // auto: show the provider that will actually be used
+              activeProviderId() === 'litert-lm'
+                ? <span className="text-emerald-400">On-device model active.</span>
+                : activeProviderId() === 'cloud'
+                  ? <span className="text-emerald-400">Cloud configured.</span>
+                  : <span className="text-amber-400/70">No model configured — using offline heuristic.</span>
             )}
           </div>
           <button
