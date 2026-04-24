@@ -188,6 +188,7 @@ function OnDeviceModelSection() {
   const { modelUrl, expectedSha256, setModelUrl, setExpectedSha256 } =
     useLitertLmConfig();
   const [status, setStatus] = useState<ModelStatus | null>(null);
+  const [aiCoreStatus, setAiCoreStatus] = useState<import('../llm/litert-lm').AiCoreStatusResult | null>(null);
   const [progress, setProgress] = useState<{ bytes: number; total: number } | null>(null);
   const [busy, setBusy] = useState<'download' | 'import' | 'delete' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -200,6 +201,7 @@ function OnDeviceModelSection() {
     if (!plugin) return;
     let cancelled = false;
     plugin.modelStatus().then((s) => { if (!cancelled) setStatus(s); });
+    plugin.aiCoreStatus().then((s) => { if (!cancelled) setAiCoreStatus(s); });
     plugin.detectDeviceModels().then((r) => { if (!cancelled) setDeviceModels(r.models); });
     const listeners: Promise<{ remove: () => Promise<void> }>[] = [
       plugin.addListener('downloadProgress', (evt) => {
@@ -281,6 +283,31 @@ function OnDeviceModelSection() {
       <label className="text-xs uppercase tracking-wider text-amber-400/70">
         On-device model (Gemma)
       </label>
+
+      {/* AICore status — only meaningful on native Android */}
+      {native && (
+        <div className="mt-2 mb-3 flex items-center gap-2">
+          {aiCoreStatus === null ? (
+            <span className="text-xs text-amber-400/40 animate-pulse">Checking system model…</span>
+          ) : aiCoreStatus.status === 'available' ? (
+            <span className="text-xs rounded-full px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+              System model (AICore) ✓ — no download needed
+            </span>
+          ) : aiCoreStatus.status === 'downloading' ? (
+            <span className="text-xs rounded-full px-2.5 py-0.5 bg-sky-500/20 border border-sky-500/40 text-sky-300">
+              AICore model downloading…
+            </span>
+          ) : aiCoreStatus.status === 'downloadable' ? (
+            <span className="text-xs text-amber-300/70">
+              System model available to download (AICore)
+            </span>
+          ) : (
+            <span className="text-xs text-amber-400/40">
+              System model unavailable — Pixel 9+ required
+            </span>
+          )}
+        </div>
+      )}
 
       {!native && (
         <p className="text-xs text-amber-400/60 mt-2">

@@ -62,6 +62,12 @@ export interface ImportProgressEvent {
   totalBytes: number;
 }
 
+export interface AiCoreStatusResult {
+  status: 'available' | 'downloadable' | 'downloading' | 'unavailable';
+  tokenLimit?: number;
+  error?: string;
+}
+
 export interface LiteRtLmPlugin {
   modelStatus(): Promise<ModelStatus>;
   setModelConfig(opts: { url: string; expectedSha256?: string }): Promise<void>;
@@ -73,6 +79,12 @@ export interface LiteRtLmPlugin {
   detectDeviceModels(): Promise<{ models: DeviceModel[] }>;
   hasAllFilesAccess(): Promise<{ granted: boolean }>;
   requestAllFilesAccess(): Promise<void>;
+  /** Check whether AICore / Gemini Nano is available on this device. */
+  aiCoreStatus(): Promise<AiCoreStatusResult>;
+  /** Warm up the AICore model to reduce first-inference cold-start latency. */
+  aiCoreWarmup(): Promise<void>;
+  /** Run inference via AICore. Rejects if AICore is not available. */
+  aiCoreGenerate(opts: { prompt: string; maxTokens?: number }): Promise<{ text: string; finishReason: string }>;
   addListener(
     eventName: 'downloadProgress',
     listenerFunc: (event: DownloadProgressEvent) => void,
@@ -95,16 +107,37 @@ export function getLiteRtLmPlugin(): LiteRtLmPlugin | null {
 
 export class LitertLmProvider implements LlmProvider {
   readonly id = 'litert-lm';
-  readonly label = 'On-device (Gemma)';
   readonly requiresModelDownload = true;
+
+  // Set by isAvailable(); used by _generate() to route calls.
+  // null = not yet checked, true = AICore ready, false = use local model.
+  private aiCoreReady: boolean | null = null;
+
+  get label(): string {
+    return this.aiCoreReady ? 'On-device (AICore)' : 'On-device (Gemma)';
+  }
 
   async isAvailable(): Promise<boolean> {
     const p = getLiteRtLmPlugin();
     if (!p) return false;
+
+    // 1. Try AICore first (Pixel 9+). If available we can infer without any
+    //    local model file, so we return true immediately and fire warmup.
     try {
-      // Always sync the persisted URL to the engine before checking status.
-      // configuredUrl is in-memory only — without this it resets to the
-      // default internal path on every cold call and misses file:// sideloads.
+      const acs = await p.aiCoreStatus();
+      if (acs.status === 'available') {
+        this.aiCoreReady = true;
+        // Warmup in background — don't block isAvailable().
+        void p.aiCoreWarmup();
+        return true;
+      }
+      this.aiCoreReady = false;
+    } catch {
+      this.aiCoreReady = false;
+    }
+
+    // 2. Fall through to local model file (download or sideload path).
+    try {
       const { modelUrl, expectedSha256 } = useLitertLmConfig.getState();
       if (modelUrl) {
         await p.setModelConfig({ url: modelUrl, expectedSha256: expectedSha256 || undefined });
@@ -116,18 +149,35 @@ export class LitertLmProvider implements LlmProvider {
     }
   }
 
-  async parseIngredients(input: string, data: DataIndex): Promise<ParsedPantry> {
+  /**
+   * Internal generate dispatcher. Tries AICore when available, falls back to
+   * the local LiteRT model. On AICore the jsonSchema field is ignored (ML Kit
+   * does not expose constrained decoding); the prompt text describes the
+   * required JSON shape and safeJsonParse handles deviations.
+   */
+  private async _generate(opts: GenerateOptions): Promise<string> {
     const p = requirePlugin();
+    if (this.aiCoreReady) {
+      try {
+        const r = await p.aiCoreGenerate({ prompt: opts.prompt, maxTokens: opts.maxTokens ?? 512 });
+        return r.text;
+      } catch {
+        // AICore inference failed (e.g. model evicted from NPU, device too hot).
+        // Session-sticky: fall through to local model for the rest of this
+        // session. Transient failures won't self-heal, but this avoids repeated
+        // failed attempts. User can re-open the app to retry AICore.
+        this.aiCoreReady = false;
+      }
+    }
+    const r = await p.generate(opts);
+    return r.text;
+  }
+
+  async parseIngredients(input: string, data: DataIndex): Promise<ParsedPantry> {
     const vocab = sampleVocabulary(data, input);
     const prompt = buildParsePrompt(input, vocab);
-    const res = await p.generate({
-      prompt,
-      maxTokens: 1024,
-      temperature: 0.1,
-      jsonSchema: PARSE_SCHEMA,
-    });
-    const parsed = safeJsonParse(res.text);
-    return mapParseOutput(parsed, data);
+    const text = await this._generate({ prompt, maxTokens: 1024, temperature: 0.1, jsonSchema: PARSE_SCHEMA });
+    return mapParseOutput(safeJsonParse(text), data);
   }
 
   async searchIntent(
@@ -135,33 +185,20 @@ export class LitertLmProvider implements LlmProvider {
     pantryIds: string[],
     data: DataIndex,
   ): Promise<IntentSearchResult> {
-    const p = requirePlugin();
     // Do the retrieval step in TS so the model only has to rank. Feeds a
     // pre-filtered candidate list of 8–12 recipes matched against pantry +
     // crude keyword tags — way faster than asking the 2B model to execute
     // search_recipes from scratch, and bounds the context size.
     const candidates = preselect(query, pantryIds, data);
     const prompt = buildIntentPrompt(query, pantryIds, candidates, data);
-    const res = await p.generate({
-      prompt,
-      maxTokens: 1280,
-      temperature: 0.3,
-      jsonSchema: INTENT_SCHEMA,
-    });
-    const parsed = safeJsonParse(res.text);
-    return mapIntentOutput(parsed, data, pantryIds, candidates);
+    const text = await this._generate({ prompt, maxTokens: 1280, temperature: 0.3, jsonSchema: INTENT_SCHEMA });
+    return mapIntentOutput(safeJsonParse(text), data, pantryIds, candidates);
   }
 
   async proposeRecipe(candidate: Recipe, data: DataIndex): Promise<RecipePolish> {
-    const p = requirePlugin();
     const prompt = buildPolishPrompt(candidate, data);
-    const res = await p.generate({
-      prompt,
-      maxTokens: 512,
-      temperature: 0.7,
-      jsonSchema: POLISH_SCHEMA,
-    });
-    const parsed = safeJsonParse(res.text);
+    const text = await this._generate({ prompt, maxTokens: 512, temperature: 0.7, jsonSchema: POLISH_SCHEMA });
+    const parsed = safeJsonParse(text);
     return {
       name: sanitiseString(parsed?.name, candidate.name, 48),
       garnish: sanitiseString(parsed?.garnish, candidate.garnish ?? '—', 80),
@@ -175,16 +212,9 @@ export class LitertLmProvider implements LlmProvider {
     pantryIds: string[],
     data: DataIndex,
   ): Promise<InventedRecipe[]> {
-    const p = requirePlugin();
     const prompt = buildInventPrompt(query, pantryIds, data);
-    const res = await p.generate({
-      prompt,
-      maxTokens: 1536,
-      temperature: 0.7,
-      jsonSchema: INVENT_SCHEMA,
-    });
-    const parsed = safeJsonParse(res.text);
-    return mapInventOutput(parsed, pantryIds, data);
+    const text = await this._generate({ prompt, maxTokens: 1536, temperature: 0.7, jsonSchema: INVENT_SCHEMA });
+    return mapInventOutput(safeJsonParse(text), pantryIds, data);
   }
 }
 

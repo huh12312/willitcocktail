@@ -9,6 +9,10 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- Soft-links the AICore system library; required="false" means the app
+             installs on non-AICore devices and falls back to the LiteRT path. -->
+        <uses-library android:name="com.google.android.aicore" android:required="false" />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -39,4 +43,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+    <!-- AICore / ML Kit GenAI: soft-declares the capability so Play Store can
+         filter, but required="false" keeps the app installable everywhere. -->
+    <uses-feature android:name="android.software.ai_capabilities" android:required="false" />
 </manifest>

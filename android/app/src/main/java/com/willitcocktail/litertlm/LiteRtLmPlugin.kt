@@ -14,6 +14,12 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
 
@@ -23,6 +29,10 @@ import java.io.File
 )
 class LiteRtLmPlugin : Plugin() {
     private val engine: LiteRtEngine by lazy { LiteRtEngine(context) }
+    private val aiCore: AiCoreEngine by lazy { AiCoreEngine() }
+    // Scope for ML Kit suspend calls. SupervisorJob so one failing call
+    // doesn't cancel siblings.
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     // Kept outside savedCall/freeSavedCall to avoid Capacitor clearing it
     // before we read it in handleOnActivityResult.
     private var importCall: PluginCall? = null
@@ -241,7 +251,70 @@ class LiteRtLmPlugin : Plugin() {
         call.resolve()
     }
 
+    // --- AICore (ML Kit GenAI) -----------------------------------------------
+
+    @PluginMethod
+    fun aiCoreStatus(call: PluginCall) {
+        scope.launch {
+            val result = runCatching { aiCore.checkStatus() }
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = { r ->
+                        call.resolve(JSObject().apply {
+                            put("status", r.status.name.lowercase())
+                            r.tokenLimit?.let { put("tokenLimit", it) }
+                        })
+                    },
+                    onFailure = { err ->
+                        // Treat any unexpected error as unavailable so the TS
+                        // side falls through to the LiteRT path gracefully.
+                        call.resolve(JSObject().apply {
+                            put("status", "unavailable")
+                            put("error", err.message ?: "unknown")
+                        })
+                    },
+                )
+            }
+        }
+    }
+
+    @PluginMethod
+    fun aiCoreWarmup(call: PluginCall) {
+        scope.launch {
+            runCatching { aiCore.warmup() }
+            withContext(Dispatchers.Main) { call.resolve() }
+        }
+    }
+
+    @PluginMethod
+    fun aiCoreGenerate(call: PluginCall) {
+        val prompt = call.getString("prompt")
+        if (prompt.isNullOrBlank()) {
+            call.reject("prompt is required")
+            return
+        }
+        val maxTokens = call.getInt("maxTokens") ?: 512
+        scope.launch {
+            val result = runCatching { aiCore.generate(prompt, maxTokens) }
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = { r ->
+                        call.resolve(JSObject().apply {
+                            put("text", r.text)
+                            put("finishReason", r.finishReason)
+                        })
+                    },
+                    onFailure = { err ->
+                        call.reject(err.message ?: "aicore generate failed", Exception(err))
+                    },
+                )
+            }
+        }
+    }
+
     override fun handleOnDestroy() {
+        scope.cancel()
+        aiCore.close()
         engine.close()
         super.handleOnDestroy()
     }

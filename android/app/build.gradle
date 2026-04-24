@@ -58,7 +58,12 @@ dependencies {
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
     implementation 'com.google.ai.edge.litertlm:litertlm-android:0.10.2'
+    // ML Kit GenAI Prompt API — wraps AICore system-resident Gemini Nano.
+    // On Pixel 9+: provides zero-download on-device inference.
+    // On other devices: checkStatus() returns UNAVAILABLE and the LiteRT path is used.
+    implementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'
 }
 
 apply from: 'capacitor.build.gradle'
