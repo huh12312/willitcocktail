@@ -6,12 +6,13 @@ interface RecipesPanelProps {
   onSelect: (id: string) => void;
 }
 
-const MAX_DISPLAY = 250;
+const PAGE_SIZE = 100;
 
 export function RecipesPanel({ onSelect }: RecipesPanelProps) {
   const data = useData();
   const [search, setSearch] = useState('');
   const [liquorFilter, setLiquorFilter] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const allLiquorCounts = useMemo(
     () => liquorCounts(data.recipes, data),
@@ -19,6 +20,8 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
   );
 
   const filtered = useMemo(() => {
+    // Reset pagination when filters change.
+    setVisibleCount(PAGE_SIZE);
     const q = search.trim().toLowerCase();
     return data.recipes
       .filter((r) => {
@@ -35,7 +38,8 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [data, search, liquorFilter]);
 
-  const displayed = filtered.slice(0, MAX_DISPLAY);
+  const displayed = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -85,9 +89,7 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
       <div className="text-xs text-amber-400/60">
         {filtered.length === 0
           ? 'No recipes match.'
-          : filtered.length > MAX_DISPLAY
-          ? `Showing ${MAX_DISPLAY} of ${filtered.length} — refine your search to narrow results`
-          : `${filtered.length} recipe${filtered.length === 1 ? '' : 's'}`}
+          : `Showing ${displayed.length} of ${filtered.length} recipe${filtered.length === 1 ? '' : 's'}`}
       </div>
 
       {/* Recipe grid */}
@@ -123,6 +125,18 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
           );
         })}
       </div>
+
+      {/* Load more */}
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+          className="w-full rounded-lg border border-amber-700/40 py-3 text-sm text-amber-300/80 hover:border-amber-500 hover:text-amber-200 transition"
+        >
+          Load {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
+          <span className="text-amber-400/50 ml-2 text-xs">({filtered.length - visibleCount} remaining)</span>
+        </button>
+      )}
     </div>
   );
 }
