@@ -19,7 +19,7 @@ import {
   search_recipes,
   type SearchRecipesArgs,
 } from './tools';
-import { matchRecipes, matchRecipesMemo } from '../matcher';
+import { matchRecipesMemo } from '../matcher';
 import { RECIPE_TAGS } from '../data/flavor-tags';
 import { sanitiseString, safeJsonParse } from './utils';
 

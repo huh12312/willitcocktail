@@ -13,7 +13,8 @@ export function sanitiseString(v: unknown, fallback: string, maxLen: number): st
  * Robust JSON parse tolerating markdown code fences, preamble text, and
  * trailing commas — common failure modes of smaller LLMs.
  */
-export function safeJsonParse(text: string): unknown {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function safeJsonParse(text: string): any {
   const direct = tryParse(text);
   if (direct !== undefined) return direct;
 
@@ -42,7 +43,8 @@ export function safeJsonParse(text: string): unknown {
   return null;
 }
 
-function tryParse(s: string): unknown | undefined {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tryParse(s: string): any | undefined {
   try {
     return JSON.parse(s);
   } catch {
