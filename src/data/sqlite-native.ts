@@ -6,11 +6,15 @@ const DB_NAME = 'cocktails';
 // cocktails.db ships in android/app/src/main/assets/databases/ and is copied
 // to the app's database directory on first launch via copyFromAssets().
 
-let connectionCache: SQLiteDBConnection | null = null;
+// Promise cache so concurrent calls during React StrictMode double-invocation
+// share one native connection instead of racing to open two.
+let connectionPromise: Promise<SQLiteDBConnection> | null = null;
 
-async function openNativeDb(): Promise<SQLiteDBConnection> {
-  if (connectionCache) return connectionCache;
+function openNativeDb(): Promise<SQLiteDBConnection> {
+  return (connectionPromise ??= _openNativeDb());
+}
 
+async function _openNativeDb(): Promise<SQLiteDBConnection> {
   const sqlite = new SQLiteConnection(CapacitorSQLite);
 
   // Copies bundled DBs from assets/databases/ into the app's DB dir on first
@@ -27,7 +31,6 @@ async function openNativeDb(): Promise<SQLiteDBConnection> {
     db = await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false);
   }
   await db.open();
-  connectionCache = db;
   return db;
 }
 

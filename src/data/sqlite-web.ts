@@ -8,10 +8,18 @@ export interface SqliteLoadOptions {
   wasmUrl?: string;
 }
 
-let dbInstance: Database | null = null;
+// Promise cache rather than a value cache: a value cache allows two concurrent
+// callers to both clear the null-check before either resolves, resulting in
+// duplicate fetches and two competing sql.js instances.
+let dbPromise: Promise<Database> | null = null;
 
-async function openDb(opts: SqliteLoadOptions = {}): Promise<Database> {
-  if (dbInstance) return dbInstance;
+function openDb(opts: SqliteLoadOptions = {}): Promise<Database> {
+  // Bypass the cache for non-default URLs (test paths) so tests stay isolated.
+  if (opts.dbUrl || opts.wasmUrl) return _openDb(opts);
+  return (dbPromise ??= _openDb(opts));
+}
+
+async function _openDb(opts: SqliteLoadOptions = {}): Promise<Database> {
   const wasmUrl = opts.wasmUrl ?? '/sql-wasm.wasm';
   const dbUrl = opts.dbUrl ?? '/cocktails.db';
 
@@ -31,8 +39,7 @@ async function openDb(opts: SqliteLoadOptions = {}): Promise<Database> {
   if (installed) {
     const bundledVersion = bundledMeta?.version ?? null;
     if (!bundledVersion || compareVersions(installed.version, bundledVersion) >= 0) {
-      dbInstance = new SQL.Database(installed.bytes);
-      return dbInstance;
+      return new SQL.Database(installed.bytes);
     }
     // Bundled DB is newer — discard the stale IDB snapshot so the next
     // cold-start sync starts from the correct baseline.
@@ -44,8 +51,7 @@ async function openDb(opts: SqliteLoadOptions = {}): Promise<Database> {
     throw new Error(`Failed to fetch cocktails DB: ${response.status} ${response.statusText}`);
   }
   const buffer = await response.arrayBuffer();
-  dbInstance = new SQL.Database(new Uint8Array(buffer));
-  return dbInstance;
+  return new SQL.Database(new Uint8Array(buffer));
 }
 
 function rowsToObjects<T>(db: Database, sql: string): T[] {
