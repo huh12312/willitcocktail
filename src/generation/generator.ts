@@ -216,6 +216,20 @@ export function generateCandidates(opts: GenerateOptions): GeneratedCandidate[] 
   const allowed = new Set(opts.families ?? GRAMMARS.map((g) => g.family));
   const rand = mulberry32(opts.seed ?? Date.now() & 0xffffffff);
 
+  // Pre-build seed signatures once so isSeedDuplicate is O(1) per candidate
+  // instead of O(recipes × ingredients) on every check.
+  const seedSigs = new Set<string>();
+  for (const r of data.recipes) {
+    if (r.source === 'generated') continue;
+    seedSigs.add(
+      r.ingredients
+        .filter((i) => !i.optional)
+        .map((i) => i.ingredientId)
+        .sort()
+        .join('|'),
+    );
+  }
+
   const out = new Map<string, GeneratedCandidate>();
   for (const grammar of GRAMMARS) {
     if (!allowed.has(grammar.family)) continue;
@@ -227,7 +241,7 @@ export function generateCandidates(opts: GenerateOptions): GeneratedCandidate[] 
       const cand = attemptCandidate(grammar, pantryIds, data, rand);
       if (!cand) break; // missing required slot — no point retrying this family
       if (out.has(cand.recipe.id)) continue;
-      if (isSeedDuplicate(cand.recipe, data)) continue;
+      if (isSeedDuplicate(cand.recipe, seedSigs)) continue;
       out.set(cand.recipe.id, cand);
       accepted++;
     }
@@ -236,19 +250,7 @@ export function generateCandidates(opts: GenerateOptions): GeneratedCandidate[] 
   return [...out.values()].sort((a, b) => b.score.total - a.score.total);
 }
 
-function isSeedDuplicate(candidate: Recipe, data: DataIndex): boolean {
-  const sig = candidate.ingredients
-    .map((i) => i.ingredientId)
-    .sort()
-    .join('|');
-  for (const r of data.recipes) {
-    if (r.source === 'generated') continue;
-    const rsig = r.ingredients
-      .filter((i) => !i.optional)
-      .map((i) => i.ingredientId)
-      .sort()
-      .join('|');
-    if (rsig === sig) return true;
-  }
-  return false;
+function isSeedDuplicate(candidate: Recipe, seedSigs: Set<string>): boolean {
+  const sig = candidate.ingredients.map((i) => i.ingredientId).sort().join('|');
+  return seedSigs.has(sig);
 }
