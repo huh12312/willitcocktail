@@ -85,25 +85,27 @@ export function AskPanel({ onSelect }: AskPanelProps) {
         }
       })
       .catch((err) => { if (!ctrl.signal.aborted) setSearchError(err instanceof Error ? err.message : String(err)); })
-      .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setSearchLoading(false); });
+      .finally(() => { if (abortRef.current === ctrl) setSearchLoading(false); });
 
     // "Created for you" uses the full LLM provider.
     // Pass expandedPantry so ingredients mentioned in the query inform invention
     // the same way they inform the search results.
-    getLlmProvider({ signal: ctrl.signal }).then((provider) =>
-      (provider.inventFromPantry
-        ? provider.inventFromPantry(trimmed, expandedPantry, data)
-        : Promise.resolve([])
+    getLlmProvider({ signal: ctrl.signal })
+      .then((provider) =>
+        (provider.inventFromPantry
+          ? provider.inventFromPantry(trimmed, expandedPantry, data)
+          : Promise.resolve([])
+        )
+          .then((res) => {
+            if (!ctrl.signal.aborted) {
+              setInvented(res);
+              if (res.length > 0) setOpenInvent(true);
+            }
+          })
+          .catch(() => { /* silent — search results stand alone */ }),
       )
-        .then((res) => {
-          if (!ctrl.signal.aborted) {
-            setInvented(res);
-            if (res.length > 0) setOpenInvent(true);
-          }
-        })
-        .catch(() => { /* silent — search results stand alone */ })
-        .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setInventLoading(false); })
-    );
+      .catch(() => { /* getLlmProvider itself failed */ })
+      .finally(() => { if (abortRef.current === ctrl) setInventLoading(false); });
   }
 
   function cancel() {
@@ -650,15 +652,14 @@ function LlmRecipeModal({
 
   useEffect(() => {
     let cancelled = false;
-    getLlmProvider().then(async (provider) => {
-      if (!provider.getLlmRecipeDetails) { setLoading(false); return; }
-      try {
+    getLlmProvider()
+      .then(async (provider) => {
+        if (!provider.getLlmRecipeDetails) return;
         const d = await provider.getLlmRecipeDetails(match.recipeName);
         if (!cancelled) setDetails(d);
-      } catch { /* silent */ } finally {
-        if (!cancelled) setLoading(false);
-      }
-    });
+      })
+      .catch(() => { /* silent — fall through to description fallback */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [match.recipeName]);
 
