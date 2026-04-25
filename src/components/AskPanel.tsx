@@ -84,7 +84,6 @@ export function AskPanel({ onSelect }: AskPanelProps) {
       .then((res) => {
         if (!ctrl.signal.aborted) {
           setSearchResult(res);
-          setOpenSearch(true);
         }
       })
       .catch((err) => { if (!ctrl.signal.aborted) setSearchError(err instanceof Error ? err.message : String(err)); })
@@ -102,7 +101,6 @@ export function AskPanel({ onSelect }: AskPanelProps) {
           .then((res) => {
             if (!ctrl.signal.aborted) {
               setInvented(res);
-              if (res.length > 0) setOpenInvent(true);
             }
           })
           .catch(() => { /* silent — search results stand alone */ }),
