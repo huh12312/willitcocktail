@@ -15,6 +15,7 @@ import {
 import { check_pantry, get_recipe, search_recipes } from './tools';
 import { generateCandidates } from '../generation/generator';
 import { pantryCovers } from '../data/pantry-covers';
+import { extractQueryIngredients } from './utils';
 
 // Simple Levenshtein for short fuzzy matches.
 function levenshtein(a: string, b: string): number {
@@ -45,41 +46,6 @@ function splitPhrases(input: string): string[] {
     .split(/[,;\n]|\band\b|\+|&|\/|\bplus\b|\bwith\b/gi)
     .map((p) => p.trim())
     .filter(Boolean);
-}
-
-/**
- * Scan a natural-language query for all ingredient mentions using word-boundary
- * matching against canonical names and aliases. Unlike parseIngredients (which
- * handles comma-separated lists and returns one result per phrase), this returns
- * every ingredient it can find anywhere in the sentence.
- *
- * Word-boundary matching avoids false positives: "gin" does not fire on
- * "ginger", "rum" does not fire on "drumstick", etc.
- */
-export function extractQueryIngredients(query: string, data: DataIndex): string[] {
-  const found = new Set<string>();
-
-  for (const ing of data.ingredients) {
-    const name = ing.name.toLowerCase();
-    if (name.length < 3) continue;
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`\\b${escaped}\\b`, 'i').test(query)) found.add(ing.id);
-  }
-
-  for (const [alias, id] of data.aliasMap) {
-    if (alias.length < 3) continue;
-    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`\\b${escaped}\\b`, 'i').test(query)) found.add(id);
-  }
-
-  // When both a parent and a child are found (e.g. "vodka" and "citrus vodka"),
-  // keep only the more specific child — it carries the parent's identity anyway
-  // for hierarchy-aware matching downstream.
-  return [...found].filter((id) => {
-    const ing = data.ingredientById.get(id);
-    // Keep if it has no parent, or if its parent was NOT also matched (it IS the most specific)
-    return !ing?.parentId || !found.has(ing.parentId);
-  });
 }
 
 export class HeuristicProvider implements LlmProvider {

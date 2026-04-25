@@ -3,7 +3,7 @@ import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
 import { useCustomRecipes } from '../store/custom-recipes';
 import { getLlmProvider, HeuristicProvider } from '../llm';
-import { extractQueryIngredients } from '../llm/heuristic';
+import { extractQueryIngredients } from '../llm/utils';
 
 import type { IntentSearchResult, InventedRecipe, LlmRecipeDetails } from '../llm';
 import type { Recipe } from '../types';

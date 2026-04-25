@@ -1,3 +1,5 @@
+import type { DataIndex } from '../data';
+
 /**
  * Shared LLM provider utilities used across all provider implementations.
  */
@@ -65,4 +67,33 @@ export function formatMlToOz(ml: number): string {
   if (ml >= 58 && ml <= 62) return '2 oz';
   const snapped = Math.round((ml / 30) * 4) / 4;
   return `${snapped} oz`;
+}
+
+/**
+ * Scan a natural-language query for all ingredient mentions using word-boundary
+ * matching. Returns every ingredient whose name or alias appears as a whole word
+ * in the query — "ginger" does not match "gin", "lime" does not match "limeade".
+ * When both a parent and child ingredient match, the child is kept (more specific).
+ */
+export function extractQueryIngredients(query: string, data: DataIndex): string[] {
+  const found = new Set<string>();
+
+  for (const ing of data.ingredients) {
+    const name = ing.name.toLowerCase();
+    if (name.length < 3) continue;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(query)) found.add(ing.id);
+  }
+
+  for (const [alias, id] of data.aliasMap) {
+    if (alias.length < 3) continue;
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(query)) found.add(id);
+  }
+
+  // Keep only the most specific match when parent and child both fire.
+  return [...found].filter((id) => {
+    const ing = data.ingredientById.get(id);
+    return !ing?.parentId || !found.has(ing.parentId);
+  });
 }

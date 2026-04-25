@@ -1,7 +1,7 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import type { DataIndex } from '../data';
 import { matchRecipesMemo } from '../matcher';
-import { sanitiseString, safeJsonParse, formatMlToOz } from './utils';
+import { sanitiseString, safeJsonParse, formatMlToOz, extractQueryIngredients } from './utils';
 import { RECIPE_TAGS, type FlavorTag } from '../data/flavor-tags';
 import type { Recipe } from '../types';
 import { useLitertLmConfig } from '../store/litertlm-config';
@@ -216,7 +216,21 @@ export class LitertLmProvider implements LlmProvider {
   ): Promise<InventedRecipe[]> {
     const prompt = buildInventPrompt(query, pantryIds, data);
     const text = await this._generate({ prompt, maxTokens: 1536, temperature: 0.7, jsonSchema: INVENT_SCHEMA });
-    return mapInventOutput(safeJsonParse(text), pantryIds, data);
+    let results = mapInventOutput(safeJsonParse(text), pantryIds, data);
+
+    // Post-filter: drop results that don't use the requested spirit.
+    const queriedIds = extractQueryIngredients(query, data);
+    const queriedSpirits = queriedIds.filter((id) => data.ingredientById.get(id)?.category === 'spirit');
+    if (queriedSpirits.length > 0) {
+      const filtered = results.filter((inv) =>
+        inv.ingredients.some((ri) => {
+          const ancs = data.ancestors.get(ri.ingredientId) ?? new Set([ri.ingredientId]);
+          return queriedSpirits.some((sid) => ancs.has(sid) || ri.ingredientId === sid);
+        }),
+      );
+      if (filtered.length > 0) results = filtered;
+    }
+    return results;
   }
 }
 
@@ -556,6 +570,14 @@ function buildInventPrompt(query: string, pantryIds: string[], data: DataIndex):
     .filter((id) => data.ingredientById.has(id))
     .join(', ');
 
+  // When the user named a specific spirit, add an explicit mandatory rule so
+  // small on-device models don't ignore the request and pick another spirit.
+  const queriedIds = extractQueryIngredients(query, data);
+  const queriedSpirits = queriedIds.filter((id) => data.ingredientById.get(id)?.category === 'spirit');
+  const spiritRule = queriedSpirits.length > 0
+    ? `MANDATORY: Every recipe MUST use "${queriedSpirits.join(' or ')}" as the base spirit — use no other spirit.`
+    : '';
+
   return [
     'You are a cocktail designer. Create 2 original cocktails using ONLY the ingredients listed in the pantry.',
     '',
@@ -572,6 +594,7 @@ function buildInventPrompt(query: string, pantryIds: string[], data: DataIndex):
     `REQUEST: ${query}`,
     '',
     'RULES:',
+    spiritRule,
     '- Every ingredient_id MUST be copied exactly from the PANTRY list above.',
     '- Do not invent ingredients outside the pantry.',
     '- Amounts in ml. Use standard pours: 60=2oz, 45=1.5oz, 30=1oz, 22=0.75oz, 15=0.5oz.',
@@ -582,7 +605,7 @@ function buildInventPrompt(query: string, pantryIds: string[], data: DataIndex):
     '[{"name":string,"family":"sour|highball|old_fashioned|martini|spritz|fizz|julep","method":"shake|stir|build","glass":"coupe|rocks|highball|martini|collins|wine","garnish":string,"instructions":string,"reasoning":string,"ingredients":[{"ingredient_id":string,"amount_ml":number}]}]',
     '',
     'JSON (no fences):',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 const FAMILIES = new Set(['sour','highball','old_fashioned','spritz','martini','flip','fizz','julep','other']);

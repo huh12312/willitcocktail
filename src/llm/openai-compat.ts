@@ -21,7 +21,7 @@ import {
 } from './tools';
 import { matchRecipesMemo } from '../matcher';
 import { RECIPE_TAGS } from '../data/flavor-tags';
-import { sanitiseString, safeJsonParse } from './utils';
+import { sanitiseString, safeJsonParse, extractQueryIngredients } from './utils';
 
 // --- Message / tool-call types (OpenAI-compatible) ---
 
@@ -515,11 +515,27 @@ export async function sharedInventFromPantry(
   completeJson: (messages: ChatMessage[]) => Promise<Record<string, unknown>>,
 ): Promise<InventedRecipe[]> {
   if (pantryIds.length === 0) return [];
+
+  // Detect spirits the user explicitly named so we can force the LLM to use them.
+  const queriedIds = extractQueryIngredients(query, data);
+  const queriedSpirits = queriedIds.filter(
+    (id) => data.ingredientById.get(id)?.category === 'spirit',
+  );
+  const queriedSpiritNames = queriedSpirits.map((id) => data.ingredientById.get(id)?.name ?? id);
+
   const pantryLines = pantryIds
     .map((id) => data.ingredientById.get(id)?.name ?? id)
     .join(', ');
+
+  // Hard constraint injected when user named a specific spirit. Without this,
+  // LLMs freely pick whatever spirit they prefer from the pantry list.
+  const spiritRule = queriedSpiritNames.length > 0
+    ? `MANDATORY: Every cocktail you invent MUST use ${queriedSpiritNames.join(' or ')} as its base spirit — do not use any other spirit even if it is in the pantry.`
+    : '';
+
   const system = [
     'You are a cocktail inventor. Design 2-3 original cocktails from the user\'s pantry.',
+    spiritRule,
     'Follow family balance: sour=2oz spirit:1oz citrus:0.75oz sweetener, old_fashioned=2oz spirit+bitters+sugar, highball=1.5oz spirit+4oz mixer, martini=2oz spirit+0.75oz modifier.',
     'Use primarily pantry ingredients (ingredientId must be from the pantry list).',
     'You MAY add up to 2 extra items per drink in "alsoNeeded" as free-text strings (e.g. "2 dashes cardamom bitters", "fresh basil leaf") — these are suggestions outside the pantry.',
@@ -529,7 +545,7 @@ export async function sharedInventFromPantry(
     `Valid method: shake|stir|build|blend|throw`,
     `Valid glass: coupe|rocks|highball|collins|martini|nick_and_nora|wine|flute|julep|hurricane`,
     `Pantry ingredient IDs: ${pantryIds.join(', ')}`,
-  ].join(' ');
+  ].filter(Boolean).join(' ');
   const user = `Pantry: ${pantryLines}\n\nRequest: ${query.trim() || 'Invent something interesting.'}`;
   try {
     const raw = await completeJson([
@@ -537,10 +553,24 @@ export async function sharedInventFromPantry(
       { role: 'user', content: user },
     ]);
     const arr = Array.isArray(raw.inventions) ? raw.inventions : [];
-    return arr
+    let results = arr
       .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
       .map((x) => parseInventedRecipe(x, pantryIds, data))
       .filter((x): x is InventedRecipe => x !== null);
+
+    // Post-filter: if the LLM ignored the spirit constraint, drop results that
+    // don't use the requested spirit and fall back to all results only if none survive.
+    if (queriedSpirits.length > 0) {
+      const filtered = results.filter((inv) =>
+        inv.ingredients.some((ri) => {
+          const ancs = data.ancestors.get(ri.ingredientId) ?? new Set([ri.ingredientId]);
+          return queriedSpirits.some((sid) => ancs.has(sid) || ri.ingredientId === sid);
+        }),
+      );
+      if (filtered.length > 0) results = filtered;
+    }
+
+    return results;
   } catch {
     return [];
   }
