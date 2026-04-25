@@ -33,7 +33,7 @@ function AppShell() {
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-amber-100">
               Will It Cocktail
             </h1>
-            <MartiniIcon className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400/75 flex-shrink-0" />
+            <MartiniIcon className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400/75 shrink-0" />
           </div>
           <p className="text-xs text-amber-400/70 mt-0.5">
             What can you make right now?

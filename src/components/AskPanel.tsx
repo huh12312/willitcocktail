@@ -132,7 +132,7 @@ export function AskPanel({ onSelect }: AskPanelProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="e.g. something bitter and stirred"
-            className="flex-1 rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-amber-100 placeholder:text-amber-500/50 focus:outline-none focus:border-amber-500"
+            className="flex-1 rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-amber-100 placeholder:text-amber-500/50 focus:outline-hidden focus:border-amber-500"
           />
           {loading ? (
             <button

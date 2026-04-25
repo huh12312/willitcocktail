@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-amber-950: #1a0f0a;
+}
 
 @layer base {
   html, body, #root {

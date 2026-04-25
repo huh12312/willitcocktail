@@ -86,7 +86,7 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
             Preset
           </label>
           <select
-            className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 focus:outline-none focus:border-amber-500"
+            className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 focus:outline-hidden focus:border-amber-500"
             value=""
             onChange={(e) => {
               const p = LLM_PRESETS.find((p) => p.label === e.target.value);
@@ -113,7 +113,7 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
             placeholder="https://api.openai.com/v1"
             value={cloud.baseUrl}
             onChange={(e) => setCloud({ baseUrl: e.target.value })}
-            className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
+            className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/40 focus:outline-hidden focus:border-amber-500"
           />
         </section>
 
@@ -126,7 +126,7 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
             placeholder="gpt-4o-mini"
             value={cloud.model}
             onChange={(e) => setCloud({ model: e.target.value })}
-            className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
+            className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/40 focus:outline-hidden focus:border-amber-500"
           />
         </section>
 
@@ -141,7 +141,7 @@ export function LlmSettings({ open, onClose }: LlmSettingsProps) {
               placeholder="sk-..."
               value={cloud.apiKey}
               onChange={(e) => setCloud({ apiKey: e.target.value })}
-              className="flex-1 rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
+              className="flex-1 rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/40 focus:outline-hidden focus:border-amber-500"
             />
             <button
               type="button"
@@ -392,7 +392,7 @@ function OnDeviceModelSection({ onActiveChange }: { onActiveChange?: (active: bo
                   placeholder="https://…/model.litertlm"
                   value={modelUrl.startsWith('file://') ? '' : modelUrl}
                   onChange={(e) => setModelUrl(e.target.value)}
-                  className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 text-xs text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
+                  className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 text-xs text-amber-100 placeholder:text-amber-500/40 focus:outline-hidden focus:border-amber-500"
                 />
               </div>
               <div>
@@ -402,7 +402,7 @@ function OnDeviceModelSection({ onActiveChange }: { onActiveChange?: (active: bo
                   placeholder="sha256 hex"
                   value={expectedSha256}
                   onChange={(e) => setExpectedSha256(e.target.value)}
-                  className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 font-mono text-[11px] text-amber-100 placeholder:text-amber-500/40 focus:outline-none focus:border-amber-500"
+                  className="mt-1 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-1.5 font-mono text-[11px] text-amber-100 placeholder:text-amber-500/40 focus:outline-hidden focus:border-amber-500"
                 />
               </div>
               <div className="flex gap-2">
