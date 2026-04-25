@@ -1,5 +1,5 @@
 import type { DataIndex } from '../data';
-import { matchRecipes } from '../matcher';
+import { matchRecipesMemo } from '../matcher';
 import type { CocktailFamily } from '../types';
 import type { FlavorTag } from '../data/flavor-tags';
 import { RECIPE_TAGS } from '../data/flavor-tags';
@@ -184,7 +184,7 @@ export class HeuristicProvider implements LlmProvider {
     }
 
     // Rank by: makeability (exact > near > almost > cannot) and tag overlap
-    const deterministicMatches = matchRecipes(pantryIds, {}, data);
+    const deterministicMatches = matchRecipesMemo(pantryIds, data);
     const matchByRecipe = new Map(deterministicMatches.map((m) => [m.recipe.id, m]));
 
     const intentMatches: IntentMatch[] = effectiveHits.slice(0, 15).map((hit) => {

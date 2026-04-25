@@ -137,7 +137,7 @@ export function get_recipe(
   recipe_id: string,
   data: DataIndex,
 ): GetRecipeResult | null {
-  const recipe = data.recipes.find((r) => r.id === recipe_id);
+  const recipe = data.recipeById.get(recipe_id);
   if (!recipe) return null;
   return {
     recipe_id: recipe.id,

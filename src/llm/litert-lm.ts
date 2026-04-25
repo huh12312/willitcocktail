@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import type { DataIndex } from '../data';
-import { matchRecipes } from '../matcher';
+import { matchRecipesMemo } from '../matcher';
+import { sanitiseString, safeJsonParse, formatMlToOz } from './utils';
 import { RECIPE_TAGS, type FlavorTag } from '../data/flavor-tags';
 import type { Recipe } from '../types';
 import { useLitertLmConfig } from '../store/litertlm-config';
@@ -314,7 +315,7 @@ function preselect(query: string, pantryIds: string[], data: DataIndex): Recipe[
   const seen = new Set<string>();
   const out: Recipe[] = [];
 
-  const pantryMatches = matchRecipes(pantryIds, {}, data);
+  const pantryMatches = matchRecipesMemo(pantryIds, data);
   for (const m of pantryMatches) {
     if (out.length >= MAX) break;
     if (seen.has(m.recipe.id)) continue;
@@ -340,7 +341,7 @@ function preselect(query: string, pantryIds: string[], data: DataIndex): Recipe[
     const fallback: SearchRecipesArgs = { max_results: MAX };
     for (const hit of search_recipes(fallback, data)) {
       if (out.length >= MAX) break;
-      const r = data.recipes.find((x) => x.id === hit.recipe_id);
+      const r = data.recipeById.get(hit.recipe_id);
       if (!r || seen.has(r.id)) continue;
       seen.add(r.id);
       out.push(r);
@@ -390,7 +391,7 @@ function mapIntentOutput(
   candidates: Recipe[],
 ): IntentSearchResult {
   const candidateIds = new Set(candidates.map((r) => r.id));
-  const pantryMatches = matchRecipes(pantryIds, {}, data);
+  const pantryMatches = matchRecipesMemo(pantryIds, data);
   const matchByRecipe = new Map(pantryMatches.map((m) => [m.recipe.id, m]));
 
   const raw = Array.isArray(parsed?.matches) ? parsed.matches : [];
@@ -398,7 +399,7 @@ function mapIntentOutput(
     .map((m: any) => {
       const id = String(m?.recipe_id ?? '').trim();
       if (!candidateIds.has(id)) return null; // hallucinated id — drop
-      const recipe = data.recipes.find((r) => r.id === id);
+      const recipe = data.recipeById.get(id);
       if (!recipe) return null;
       const det = matchByRecipe.get(id);
       let makeability: IntentMatch['makeability'] = 'cannot_make';
@@ -488,52 +489,7 @@ function sampleVocabulary(data: DataIndex, input: string): string {
   return out.join(', ');
 }
 
-function sanitiseString(v: unknown, fallback: string, maxLen: number): string {
-  const s = typeof v === 'string' ? v.trim() : '';
-  if (!s) return fallback;
-  return s.length > maxLen ? s.slice(0, maxLen) : s;
-}
-
-export function safeJsonParse(text: string): any {
-  // Small LLMs wrap JSON in code fences, apologise before/after, or emit
-  // trailing commas. Try a few progressively looser repairs before giving up.
-  const direct = tryParse(text);
-  if (direct !== undefined) return direct;
-
-  // Strip Markdown fences.
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced?.[1]) {
-    const f = tryParse(fenced[1]);
-    if (f !== undefined) return f;
-  }
-
-  // Extract the first balanced {...} block.
-  const firstBrace = text.indexOf('{');
-  if (firstBrace >= 0) {
-    let depth = 0;
-    for (let i = firstBrace; i < text.length; i++) {
-      if (text[i] === '{') depth++;
-      else if (text[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          const slice = text.slice(firstBrace, i + 1);
-          const parsed = tryParse(slice) ?? tryParse(slice.replace(/,\s*([}\]])/g, '$1'));
-          if (parsed !== undefined) return parsed;
-          break;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function tryParse(s: string): any | undefined {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return undefined;
-  }
-}
+export { safeJsonParse } from './utils';
 
 // JSON schemas. Stringified so the plugin can forward them to MediaPipe's
 // constrained-decoding API when available. When unsupported, the prompt itself
@@ -629,6 +585,10 @@ function buildInventPrompt(query: string, pantryIds: string[], data: DataIndex):
   ].join('\n');
 }
 
+const FAMILIES = new Set(['sour','highball','old_fashioned','spritz','martini','flip','fizz','julep','other']);
+const METHODS  = new Set(['shake','stir','build','blend','throw']);
+const GLASSES  = new Set(['coupe','rocks','highball','collins','martini','nick_and_nora','wine','flute','julep','hurricane']);
+
 function mapInventOutput(parsed: any, pantryIds: string[], data: DataIndex): InventedRecipe[] {
   const pantrySet = new Set(pantryIds);
   const raw = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.recipes) ? parsed.recipes : []);
@@ -657,14 +617,18 @@ function mapInventOutput(parsed: any, pantryIds: string[], data: DataIndex): Inv
 
     if (ingredients.length < 2) continue;
 
+    const rawFamily = sanitiseString(r.family, '', 20);
+    const rawMethod = sanitiseString(r.method, '', 10);
+    const rawGlass  = sanitiseString(r.glass,  '', 20);
+
     results.push({
-      name: sanitiseString(r.name, 'Unnamed', 48),
-      family: sanitiseString(r.family, 'sour', 20) as InventedRecipe['family'],
-      method: sanitiseString(r.method, 'shake', 10) as InventedRecipe['method'],
-      glass: sanitiseString(r.glass, 'coupe', 10) as InventedRecipe['glass'],
-      garnish: sanitiseString(r.garnish, '', 80),
+      name:         sanitiseString(r.name, 'Unnamed', 48),
+      family:       (FAMILIES.has(rawFamily) ? rawFamily : 'other') as InventedRecipe['family'],
+      method:       (METHODS.has(rawMethod)  ? rawMethod : 'shake') as InventedRecipe['method'],
+      glass:        (GLASSES.has(rawGlass)   ? rawGlass  : 'coupe') as InventedRecipe['glass'],
+      garnish:      sanitiseString(r.garnish, '', 80),
       instructions: sanitiseString(r.instructions, '', 400),
-      reasoning: sanitiseString(r.reasoning, '', 300),
+      reasoning:    sanitiseString(r.reasoning, '', 300),
       ingredients,
       missing,
       alsoNeeded: [],
@@ -674,12 +638,6 @@ function mapInventOutput(parsed: any, pantryIds: string[], data: DataIndex): Inv
   return results;
 }
 
-function formatMlToOz(ml: number): string {
-  const oz = ml / 30;
-  const snapped = Math.round(oz * 4) / 4; // snap to nearest 0.25 oz
-  if (snapped === Math.floor(snapped)) return `${snapped} oz`;
-  return `${snapped} oz`;
-}
 
 const INVENT_SCHEMA = JSON.stringify({
   type: 'array',

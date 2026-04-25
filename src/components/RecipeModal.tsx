@@ -25,7 +25,7 @@ export function RecipeModal({ recipeId, onClose }: RecipeModalProps) {
   }, [recipeId, onClose]);
 
   if (!recipeId) return null;
-  const recipe = data.recipes.find((r) => r.id === recipeId);
+  const recipe = data.recipeById.get(recipeId);
   if (!recipe) return null;
 
   function bestSubstitute(id: string): { useId: string; strength: number; notes: string | null } | null {

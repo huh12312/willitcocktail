@@ -12,6 +12,7 @@ export interface DataIndex {
   substitutes: Substitute[];
   substitutesOf: Map<string, Substitute[]>; // ingredient id -> list of its substitutes
   recipes: Recipe[];
+  recipeById: Map<string, Recipe>;
   // For hierarchy: map of ingredientId -> Set of descendant ids (self + children recursively)
   descendants: Map<string, Set<string>>;
   // ancestors: ingredientId -> Set of ancestor ids (self + parent chain up to root)
@@ -77,6 +78,7 @@ export function buildDataIndex(
     arr.push(s);
     substitutesOf.set(s.ingredientId, arr);
   }
+  const recipeById = new Map(recipes.map((r) => [r.id, r]));
   const { descendants, ancestors } = buildHierarchy(ingredients, ingredientById);
 
   return {
@@ -87,6 +89,7 @@ export function buildDataIndex(
     substitutes,
     substitutesOf,
     recipes,
+    recipeById,
     descendants,
     ancestors,
   };

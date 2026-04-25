@@ -172,6 +172,29 @@ export function matchRecipes(
   return results;
 }
 
+// Module-level cache: WeakMap<DataIndex, Map<serialisedPantry, MatchResult[]>>.
+// The DataIndex reference is stable within a session (loaded once from SQLite);
+// the pantry string changes only when the user modifies their pantry.
+const _matchCache = new WeakMap<object, Map<string, MatchResult[]>>();
+
+/** Cached variant of matchRecipes with default options. Avoids re-running the
+ *  full O(recipes × pantry) pass multiple times per Ask query when the same
+ *  pantry and data are used across providers and mappers. */
+export function matchRecipesMemo(pantryIds: string[], data: DataIndex): MatchResult[] {
+  let byData = _matchCache.get(data);
+  if (!byData) {
+    byData = new Map();
+    _matchCache.set(data, byData);
+  }
+  const key = pantryIds.join('\0');
+  let cached = byData.get(key);
+  if (!cached) {
+    cached = matchRecipes(pantryIds, {}, data);
+    byData.set(key, cached);
+  }
+  return cached;
+}
+
 export function groupByTier(results: MatchResult[]): {
   exact: MatchResult[];
   near: MatchResult[];

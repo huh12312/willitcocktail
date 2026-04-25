@@ -86,6 +86,7 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
     const aliasMap = new Map(state.data.aliasMap);
     const descendants = new Map(state.data.descendants);
     const ancestors = new Map(state.data.ancestors);
+    const recipeById = new Map(state.data.recipeById);
     for (const ing of extraIngredients) {
       ingredientById.set(ing.id, ing);
       // Humanized name as alias so the heuristic resolver can match it.
@@ -94,6 +95,7 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
       descendants.set(ing.id, new Set([ing.id]));
       ancestors.set(ing.id, new Set([ing.id]));
     }
+    for (const r of customRecipes) recipeById.set(r.id, r);
 
     return {
       ...state.data,
@@ -103,6 +105,7 @@ export function DataProvider({ children, fallback }: DataProviderProps) {
       descendants,
       ancestors,
       recipes: [...state.data.recipes, ...customRecipes],
+      recipeById,
     };
   }, [state, customRecipes, customIngredients]);
 

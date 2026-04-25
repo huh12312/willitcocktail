@@ -19,8 +19,9 @@ import {
   search_recipes,
   type SearchRecipesArgs,
 } from './tools';
-import { matchRecipes } from '../matcher';
+import { matchRecipes, matchRecipesMemo } from '../matcher';
 import { RECIPE_TAGS } from '../data/flavor-tags';
+import { sanitiseString, safeJsonParse } from './utils';
 
 // --- Message / tool-call types (OpenAI-compatible) ---
 
@@ -513,25 +514,19 @@ export function executeTool(
   }
 }
 
-export function sanitiseString(v: unknown, fallback: string, maxLen: number): string {
-  const s = typeof v === 'string' ? v.trim() : '';
-  if (!s) return fallback;
-  return s.length > maxLen ? s.slice(0, maxLen) : s;
-}
-
-function safeJsonParse(s: string): unknown {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return {};
-  }
-}
+export { sanitiseString, safeJsonParse } from './utils';
 
 // --- System prompts ---
 
+// Memoized by DataIndex instance: the full ingredient ID list is deterministic
+// for a given data snapshot and can be expensive to rebuild (hundreds of IDs).
+const _parseSystemCache = new WeakMap<object, string>();
+
 export function buildParseSystem(data: DataIndex): string {
+  const cached = _parseSystemCache.get(data);
+  if (cached) return cached;
   const allIds = data.ingredients.map((i) => `${i.id} (${i.name})`).join(', ');
-  return [
+  const result = [
     'You help parse freeform ingredient lists into canonical ingredient IDs for a cocktail app.',
     'Call search_recipes / get_recipe only if you need to verify an ID.',
     `Full canonical ID list: ${allIds}.`,
@@ -539,6 +534,8 @@ export function buildParseSystem(data: DataIndex): string {
     'Confidence: 1.0 = certain; 0.7 = probable; 0.4 = guess. Put unparseable phrases in "unresolved".',
     'Always finish by calling finalize_pantry exactly once.',
   ].join(' ');
+  _parseSystemCache.set(data, result);
+  return result;
 }
 
 export function buildIntentSystem(data: DataIndex, pantryIds: string[]): string {
@@ -594,17 +591,18 @@ export function mapFinalizePantry(
 function resolveRecipeId(raw: unknown, data: DataIndex): string | null {
   const s = String(raw ?? '').trim();
   if (!s) return null;
-  // Exact ID
-  if (data.recipes.some((r) => r.id === s)) return s;
+  // Exact ID (O(1) via recipeById)
+  if (data.recipeById.has(s)) return s;
   // snake_case normalise
   const normalised = s.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-  if (data.recipes.some((r) => r.id === normalised)) return normalised;
-  // Name match (case-insensitive)
-  const byName = data.recipes.find((r) => r.name.toLowerCase() === s.toLowerCase());
+  if (data.recipeById.has(normalised)) return normalised;
+  // Name match (case-insensitive) — still O(n) but rare
+  const sLower = s.toLowerCase();
+  const byName = data.recipes.find((r) => r.name.toLowerCase() === sLower);
   if (byName) return byName.id;
   // Partial name match (rare fallback)
   const partial = data.recipes.find(
-    (r) => r.name.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(r.name.toLowerCase()),
+    (r) => r.name.toLowerCase().includes(sLower) || sLower.includes(r.name.toLowerCase()),
   );
   return partial?.id ?? null;
 }
@@ -620,7 +618,7 @@ export function mapFinalizeIntent(
     notes?: string;
   };
 
-  const deterministicMatches = matchRecipes(pantryIds, {}, data);
+  const deterministicMatches = matchRecipesMemo(pantryIds, data);
   const matchByRecipe = new Map(deterministicMatches.map((m) => [m.recipe.id, m]));
 
   const rawMatches = args.matches ?? [];
@@ -629,7 +627,7 @@ export function mapFinalizeIntent(
   for (const m of rawMatches) {
     const rawId = m?.recipe_id;
     const id = resolveRecipeId(rawId, data);
-    const recipe = id ? data.recipes.find((r) => r.id === id) : null;
+    const recipe = id ? data.recipeById.get(id) : null;
 
     if (!recipe || !id) {
       // Recipe not in DB — surface as an LLM-generated suggestion if the model gave us a name.

@@ -8,6 +8,7 @@ import {
   pantryCandidatesForSlot,
 } from '../data/grammars';
 import { scoreCandidate, type CandidateScore } from './validator';
+import { formatMlToOz } from '../llm/utils';
 
 export interface GeneratedCandidate {
   recipe: Recipe;
@@ -53,20 +54,11 @@ function amountForSlot(slot: GrammarSlot, rand: () => number): {
     const span = amount.maxMl - amount.minMl;
     const raw = amount.minMl + rand() * span;
     const ml = snapTo(raw, 5);
-    return { amountMl: ml, amountDisplay: formatOz(ml) };
+    return { amountMl: ml, amountDisplay: formatMlToOz(ml) };
   }
   return { amountDisplay: amount.display ?? 'to taste' };
 }
 
-function formatOz(ml: number): string {
-  if (ml >= 29 && ml <= 31) return '1 oz';
-  if (ml >= 14 && ml <= 16) return '0.5 oz';
-  if (ml >= 21 && ml <= 23) return '0.75 oz';
-  if (ml >= 43 && ml <= 47) return '1.5 oz';
-  if (ml >= 58 && ml <= 62) return '2 oz';
-  const oz = ml / 30;
-  return `${oz.toFixed(2).replace(/\.?0+$/, '')} oz`;
-}
 
 function shortHash(input: string): string {
   let h = 2166136261;
