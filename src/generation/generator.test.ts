@@ -40,11 +40,16 @@ describe('grammars', () => {
       'bamboo', // sherry + dry vermouth, no spirit base
       'adonis', // sherry + sweet vermouth, no spirit base
       'seelbach', // bourbon + triple sec + massive bitters + sparkling wine
+      'sea_breeze', // highball topped with cranberry + grapefruit juice, not a carbonated mixer
     ]);
 
     for (const recipe of DATA.recipes) {
-      // HF-imported recipes have heuristically-inferred families and are not held to the hand-curated grammar standard.
+      // Programmatically-imported recipes (huggingface, cocktaildb, cocktailfyi)
+      // have heuristically-inferred families and are not held to the grammar standard.
+      // Only IBA and hand-curated 'user'/'generated' sources are checked.
       if (recipe.source === 'huggingface') continue;
+      if (recipe.source === 'cocktaildb') continue;
+      if (recipe.source === 'cocktailfyi') continue;
       if (exemptions.has(recipe.id)) continue;
       const grammar = getGrammar(recipe.family);
       if (!grammar) continue;

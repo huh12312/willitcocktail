@@ -279,12 +279,37 @@ export class HeuristicProvider implements LlmProvider {
   }
 
   async inventFromPantry(
-    _query: string,
+    query: string,
     pantryIds: string[],
     data: DataIndex,
   ): Promise<InventedRecipe[]> {
-    const candidates = generateCandidates({ pantryIds, data, seed: Date.now(), perFamily: 2 });
-    return candidates.slice(0, 4).map((c) => ({
+    // Extract spirits the user named so we can bias generation toward them.
+    const queriedIds = extractQueryIngredients(query, data);
+    const queriedSpirits = queriedIds.filter(
+      (id) => data.ingredientById.get(id)?.category === 'spirit',
+    );
+
+    // Generate more candidates than needed so we have room to filter by spirit.
+    const candidates = generateCandidates({ pantryIds, data, seed: Date.now(), perFamily: 4 });
+
+    // When the user named a specific spirit, keep only candidates whose base
+    // spirit matches. Fall back to all candidates if none survive the filter
+    // (e.g. the requested spirit isn't in the pantry at all).
+    let pool = candidates;
+    if (queriedSpirits.length > 0) {
+      const spiritSet = new Set(queriedSpirits);
+      const filtered = candidates.filter((c) => {
+        const baseId = c.filledRoles.base;
+        if (!baseId) return false;
+        // Hierarchy-aware: "vodka" query matches "citrus_vodka" base and vice-versa.
+        const baseAncs = data.ancestors.get(baseId) ?? new Set([baseId]);
+        return queriedSpirits.some((sid) => baseAncs.has(sid) || baseId === sid)
+          || spiritSet.has(baseId);
+      });
+      if (filtered.length > 0) pool = filtered;
+    }
+
+    return pool.slice(0, 4).map((c) => ({
       name: c.recipe.name,
       family: c.recipe.family,
       method: c.recipe.method,
