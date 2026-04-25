@@ -725,7 +725,7 @@ function parseInventedRecipe(
     instructions: sanitiseString(raw.instructions, '', 600),
     reasoning: typeof raw.reasoning === 'string' ? raw.reasoning : undefined,
     ingredients,
-    missing: [],
+    missing,
     alsoNeeded,
   };
 }

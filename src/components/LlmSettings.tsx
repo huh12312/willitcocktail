@@ -215,8 +215,8 @@ function OnDeviceModelSection({ onActiveChange }: { onActiveChange?: (active: bo
     if (!plugin) return;
     let cancelled = false;
     plugin.modelStatus().then((s) => { if (!cancelled) setStatus(s); });
-    plugin.aiCoreStatus().then((s) => { if (!cancelled) setAiCoreStatus(s); });
-    plugin.detectDeviceModels().then((r) => { if (!cancelled) setDeviceModels(r.models); });
+    plugin.aiCoreStatus().then((s) => { if (!cancelled) setAiCoreStatus(s); }).catch(() => {});
+    plugin.detectDeviceModels().then((r) => { if (!cancelled) setDeviceModels(r.models); }).catch(() => {});
     const listeners: Promise<{ remove: () => Promise<void> }>[] = [
       plugin.addListener('downloadProgress', (evt) => {
         setProgress({ bytes: evt.bytesDownloaded, total: evt.totalBytes });
