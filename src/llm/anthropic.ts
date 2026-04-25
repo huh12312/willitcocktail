@@ -18,9 +18,11 @@ import {
   mapFinalizePantry,
   mapFinalizeIntent,
   executeTool,
-  sanitiseString,
-  parseInventedRecipe,
+  sharedProposeRecipe,
+  sharedGetLlmRecipeDetails,
+  sharedInventFromPantry,
 } from './openai-compat';
+import { safeJsonParse } from './utils';
 
 // --- Anthropic tool schema conversion ----------------------------------------
 // Anthropic tools use `input_schema` instead of OpenAI's `parameters`, and the
@@ -71,15 +73,11 @@ interface AnthropicSSEEvent {
 
 // --- Message conversion: internal OpenAI format → Anthropic wire format ------
 
-function safeParseObject(s: string): Record<string, unknown> {
-  try {
-    const v = JSON.parse(s);
-    return typeof v === 'object' && v !== null && !Array.isArray(v)
-      ? (v as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
+function toObject(s: string): Record<string, unknown> {
+  const v = safeJsonParse(s);
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : {};
 }
 
 function toAnthropicPayload(messages: ChatMessage[]): {
@@ -113,7 +111,7 @@ function toAnthropicPayload(messages: ChatMessage[]): {
             id: tc.id,
             name: tc.function.name,
             // Anthropic wants the parsed object, not a JSON string.
-            input: safeParseObject(tc.function.arguments),
+            input: toObject(tc.function.arguments),
           });
         }
         result.push({ role: 'assistant', content });
@@ -177,63 +175,11 @@ export class AnthropicProvider implements LlmProvider {
   }
 
   async proposeRecipe(candidate: Recipe, data: DataIndex): Promise<RecipePolish> {
-    const ingredientLines = candidate.ingredients
-      .map((ri) => {
-        const name = data.ingredientById.get(ri.ingredientId)?.name ?? ri.ingredientId;
-        return `- ${name}: ${ri.amountDisplay}${ri.notes ? ` (${ri.notes})` : ''}`;
-      })
-      .join('\n');
-    const system = [
-      'You polish a pre-structured cocktail recipe. The ingredients, amounts, glass, and method are fixed — you must NOT change them.',
-      'Return strict JSON with keys: name (max 4 words, no quotes, no "The" unless needed), garnish (short phrase), instructions (2-3 sentences), reasoning (1 sentence on why this works).',
-      'Return ONLY the JSON object, no preamble.',
-    ].join(' ');
-    const user = [
-      `Family: ${candidate.family}`,
-      `Method: ${candidate.method}, Glass: ${candidate.glass}`,
-      `Ingredients:\n${ingredientLines}`,
-      `Current placeholder name: ${candidate.name}`,
-      `Invent a better name and write proper instructions.`,
-    ].join('\n');
-    const raw = await this.completeJson([
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ]);
-    return {
-      name: sanitiseString(raw.name, candidate.name, 48),
-      garnish: sanitiseString(raw.garnish, candidate.garnish ?? '—', 80),
-      instructions: sanitiseString(raw.instructions, candidate.instructions, 400),
-      reasoning: sanitiseString(raw.reasoning, '', 300),
-    };
+    return sharedProposeRecipe(candidate, data, (msgs) => this.completeJson(msgs));
   }
 
   async getLlmRecipeDetails(name: string): Promise<LlmRecipeDetails | null> {
-    const system = [
-      'You are a cocktail expert. Return a JSON recipe for the requested drink.',
-      'Keys: ingredients (array of {name: string, amount: string}), instructions (2-3 sentences), garnish (short phrase or null), glass (glass type).',
-      'Use standard bartender amounts (oz or dashes). Return ONLY the JSON object, no preamble.',
-    ].join(' ');
-    try {
-      const raw = await this.completeJson([
-        { role: 'system', content: system },
-        { role: 'user', content: `Recipe for: ${name}` },
-      ]);
-      const ings = Array.isArray(raw.ingredients)
-        ? (raw.ingredients as unknown[])
-            .filter((i): i is { name: unknown; amount: unknown } => typeof i === 'object' && i !== null)
-            .map((i) => ({ name: String(i.name ?? ''), amount: String(i.amount ?? '') }))
-            .filter((i) => i.name)
-        : [];
-      if (ings.length === 0) return null;
-      return {
-        ingredients: ings,
-        instructions: sanitiseString(raw.instructions, '', 600),
-        garnish: raw.garnish ? sanitiseString(raw.garnish, '', 80) : undefined,
-        glass: raw.glass ? sanitiseString(raw.glass, '', 60) : undefined,
-      };
-    } catch {
-      return null;
-    }
+    return sharedGetLlmRecipeDetails(name, (msgs) => this.completeJson(msgs));
   }
 
   async searchIntent(
@@ -255,36 +201,7 @@ export class AnthropicProvider implements LlmProvider {
     pantryIds: string[],
     data: DataIndex,
   ): Promise<InventedRecipe[]> {
-    if (pantryIds.length === 0) return [];
-    const pantryLines = pantryIds
-      .map((id) => data.ingredientById.get(id)?.name ?? id)
-      .join(', ');
-    const system = [
-      'You are a cocktail inventor. Design 2-3 original cocktails from the user\'s pantry.',
-      'Follow family balance: sour=2oz spirit:1oz citrus:0.75oz sweetener, old_fashioned=2oz spirit+bitters+sugar, highball=1.5oz spirit+4oz mixer, martini=2oz spirit+0.75oz modifier.',
-      'Use primarily pantry ingredients (ingredientId must be from the pantry list).',
-      'You MAY add up to 2 extra items per drink in "alsoNeeded" as free-text strings (e.g. "2 dashes cardamom bitters").',
-      'Names: max 4 words, distinctive, no generic names.',
-      'Return ONLY JSON: { "inventions": [ { name, family, method, glass, garnish, instructions, reasoning, ingredients: [{ingredientId, amountDisplay, amountMl, position}], alsoNeeded: [] } ] }',
-      'Valid family: sour|highball|old_fashioned|spritz|martini|flip|fizz|julep|other',
-      'Valid method: shake|stir|build|blend|throw',
-      'Valid glass: coupe|rocks|highball|collins|martini|nick_and_nora|wine|flute|julep|hurricane',
-      `Pantry ingredient IDs: ${pantryIds.join(', ')}`,
-    ].join(' ');
-    const user = `Pantry: ${pantryLines}\n\nRequest: ${query.trim() || 'Invent something interesting.'}`;
-    try {
-      const raw = await this.completeJson([
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ]);
-      const arr = Array.isArray(raw.inventions) ? raw.inventions : [];
-      return arr
-        .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
-        .map((x) => parseInventedRecipe(x, pantryIds, data))
-        .filter((x): x is InventedRecipe => x !== null);
-    } catch {
-      return [];
-    }
+    return sharedInventFromPantry(query, pantryIds, data, (msgs) => this.completeJson(msgs));
   }
 
   // --- Core tool loop ---------------------------------------------------------
@@ -318,7 +235,7 @@ export class AnthropicProvider implements LlmProvider {
       for (const call of toolCalls) {
         this.opts.onToolCall?.(call.function.name, call.function.arguments);
         if (call.function.name === terminator) {
-          return { name: call.function.name, args: safeParseObject(call.function.arguments) };
+          return { name: call.function.name, args: toObject(call.function.arguments) };
         }
         const result = executeTool(call.function.name, call.function.arguments, data, pantryIds);
         messages.push({
@@ -347,6 +264,7 @@ export class AnthropicProvider implements LlmProvider {
         'Content-Type': 'application/json',
         'x-api-key': config.apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
       signal,
       body: JSON.stringify({
@@ -431,12 +349,10 @@ export class AnthropicProvider implements LlmProvider {
       if (block.type === 'text') {
         content += block.text;
       } else if (block.type === 'tool_use' && block.name) {
-        const argsJson = block.inputJson || '{}';
-        this.opts.onToolCall?.(block.name, argsJson);
         toolCalls.push({
           id: block.id || `call_${toolCalls.length}`,
           type: 'function',
-          function: { name: block.name, arguments: argsJson },
+          function: { name: block.name, arguments: block.inputJson || '{}' },
         });
       }
     }
@@ -460,11 +376,12 @@ export class AnthropicProvider implements LlmProvider {
         'Content-Type': 'application/json',
         'x-api-key': config.apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
       signal,
       body: JSON.stringify({
         model: config.model,
-        max_tokens: 1024,
+        max_tokens: 4096,
         temperature: 0.7,
         ...(system ? { system } : {}),
         messages: anthropicMessages,
