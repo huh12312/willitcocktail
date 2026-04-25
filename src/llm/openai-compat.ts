@@ -24,7 +24,7 @@ import { RECIPE_TAGS } from '../data/flavor-tags';
 
 // --- Message / tool-call types (OpenAI-compatible) ---
 
-interface ChatMessage {
+export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
   tool_call_id?: string;
@@ -32,7 +32,7 @@ interface ChatMessage {
   name?: string;
 }
 
-interface ChatToolCall {
+export interface ChatToolCall {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
@@ -54,7 +54,7 @@ interface SSEChunk {
 
 // --- Tool schema for the model (JSON Schema shape) ---
 
-const TOOL_FUNCTIONS = [
+export const TOOL_FUNCTIONS = [
   {
     type: 'function',
     function: {
@@ -492,7 +492,7 @@ export class OpenAiCompatProvider implements LlmProvider {
 
 // --- Tool dispatch ---
 
-function executeTool(
+export function executeTool(
   name: string,
   argsJson: string,
   data: DataIndex,
@@ -513,7 +513,7 @@ function executeTool(
   }
 }
 
-function sanitiseString(v: unknown, fallback: string, maxLen: number): string {
+export function sanitiseString(v: unknown, fallback: string, maxLen: number): string {
   const s = typeof v === 'string' ? v.trim() : '';
   if (!s) return fallback;
   return s.length > maxLen ? s.slice(0, maxLen) : s;
@@ -529,7 +529,7 @@ function safeJsonParse(s: string): unknown {
 
 // --- System prompts ---
 
-function buildParseSystem(data: DataIndex): string {
+export function buildParseSystem(data: DataIndex): string {
   const allIds = data.ingredients.map((i) => `${i.id} (${i.name})`).join(', ');
   return [
     'You help parse freeform ingredient lists into canonical ingredient IDs for a cocktail app.',
@@ -541,7 +541,7 @@ function buildParseSystem(data: DataIndex): string {
   ].join(' ');
 }
 
-function buildIntentSystem(data: DataIndex, pantryIds: string[]): string {
+export function buildIntentSystem(data: DataIndex, pantryIds: string[]): string {
   const pantryNames = pantryIds
     .map((id) => data.ingredientById.get(id)?.name ?? id)
     .join(', ');
@@ -560,7 +560,7 @@ function buildIntentSystem(data: DataIndex, pantryIds: string[]): string {
 
 // --- Mapping model output → typed results ---
 
-function mapFinalizePantry(
+export function mapFinalizePantry(
   final: { name: string; args: unknown },
   data: DataIndex,
 ): ParsedPantry {
@@ -609,7 +609,7 @@ function resolveRecipeId(raw: unknown, data: DataIndex): string | null {
   return partial?.id ?? null;
 }
 
-function mapFinalizeIntent(
+export function mapFinalizeIntent(
   final: { name: string; args: unknown },
   data: DataIndex,
   pantryIds: string[],
@@ -693,7 +693,7 @@ function mapFinalizeIntent(
   };
 }
 
-function parseInventedRecipe(
+export function parseInventedRecipe(
   raw: Record<string, unknown>,
   pantryIds: string[],
   data: DataIndex,

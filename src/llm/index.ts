@@ -1,6 +1,7 @@
 import { HeuristicProvider } from './heuristic';
 import { LitertLmProvider, getLiteRtLmPlugin } from './litert-lm';
 import { OpenAiCompatProvider } from './openai-compat';
+import { AnthropicProvider } from './anthropic';
 import type { LlmProvider } from './provider';
 import { useLlmSettings, isCloudConfigured, type ProviderChoice } from './settings';
 import { Capacitor } from '@capacitor/core';
@@ -9,6 +10,7 @@ export type { LlmProvider, ParsedPantry, IntentMatch, IntentSearchResult, LlmRec
 export { HeuristicProvider } from './heuristic';
 export { LitertLmProvider } from './litert-lm';
 export { OpenAiCompatProvider } from './openai-compat';
+export { AnthropicProvider } from './anthropic';
 export { useLlmSettings, isCloudConfigured, LLM_PRESETS } from './settings';
 export type { CloudConfig, ProviderChoice, LlmPreset } from './settings';
 
@@ -35,6 +37,17 @@ export async function getLlmProvider(opts: GetProviderOptions = {}): Promise<Llm
   }
 
   if (shouldTry(choice, 'cloud') && isCloudConfigured(cloud)) {
+    // Route to the Anthropic provider when the base URL points at Anthropic's
+    // API — their wire format (x-api-key header, /messages endpoint, content
+    // blocks) is incompatible with the OpenAI /chat/completions shape.
+    if (cloud.baseUrl.includes('anthropic.com')) {
+      return new AnthropicProvider({
+        config: cloud,
+        onToken: opts.onToken,
+        onToolCall: opts.onToolCall,
+        signal: opts.signal,
+      });
+    }
     return new OpenAiCompatProvider({
       config: cloud,
       onToken: opts.onToken,
