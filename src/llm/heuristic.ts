@@ -14,6 +14,7 @@ import {
 } from './provider';
 import { check_pantry, get_recipe, search_recipes } from './tools';
 import { generateCandidates } from '../generation/generator';
+import { pantryCovers } from '../data/pantry-covers';
 
 // Simple Levenshtein for short fuzzy matches.
 function levenshtein(a: string, b: string): number {
@@ -44,6 +45,41 @@ function splitPhrases(input: string): string[] {
     .split(/[,;\n]|\band\b|\+|&|\/|\bplus\b|\bwith\b/gi)
     .map((p) => p.trim())
     .filter(Boolean);
+}
+
+/**
+ * Scan a natural-language query for all ingredient mentions using word-boundary
+ * matching against canonical names and aliases. Unlike parseIngredients (which
+ * handles comma-separated lists and returns one result per phrase), this returns
+ * every ingredient it can find anywhere in the sentence.
+ *
+ * Word-boundary matching avoids false positives: "gin" does not fire on
+ * "ginger", "rum" does not fire on "drumstick", etc.
+ */
+export function extractQueryIngredients(query: string, data: DataIndex): string[] {
+  const found = new Set<string>();
+
+  for (const ing of data.ingredients) {
+    const name = ing.name.toLowerCase();
+    if (name.length < 3) continue;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(query)) found.add(ing.id);
+  }
+
+  for (const [alias, id] of data.aliasMap) {
+    if (alias.length < 3) continue;
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(query)) found.add(id);
+  }
+
+  // When both a parent and a child are found (e.g. "vodka" and "citrus vodka"),
+  // keep only the more specific child — it carries the parent's identity anyway
+  // for hierarchy-aware matching downstream.
+  return [...found].filter((id) => {
+    const ing = data.ingredientById.get(id);
+    // Keep if it has no parent, or if its parent was NOT also matched (it IS the most specific)
+    return !ing?.parentId || !found.has(ing.parentId);
+  });
 }
 
 export class HeuristicProvider implements LlmProvider {
@@ -147,47 +183,47 @@ export class HeuristicProvider implements LlmProvider {
     let wantedFamily: CocktailFamily | undefined;
     for (const [fam, kws] of Object.entries(FAMILY_KEYWORDS) as [CocktailFamily, string[]][]) {
       for (const kw of kws) {
-        if (kw && q.includes(kw)) {
-          wantedFamily = fam;
-          break;
-        }
+        if (kw && q.includes(kw)) { wantedFamily = fam; break; }
       }
       if (wantedFamily) break;
     }
 
-    // Also try to extract referenced ingredients from the query using the parser
-    const parsed = await this.parseIngredients(query, data);
-    const hasIngredients = parsed.resolved.map((r) => r.ingredientId);
+    // Scan the full query for ALL ingredient mentions (word-boundary match).
+    // pantryIds here is the expandedPantry from AskPanel — already includes
+    // anything the user named, so makeability scores are correct.
+    const queriedIds = extractQueryIngredients(query, data);
+    const queriedSet = new Set(queriedIds);
 
-    // Run tool-level search
-    const hits = search_recipes(
-      {
-        has_ingredients: hasIngredients.length ? hasIngredients : undefined,
-        family: wantedFamily,
-        flavor_tags: wantedTags.size ? Array.from(wantedTags) : undefined,
-        max_results: 20,
-      },
+    // Spirits the user named become the hard ingredient filter: if they asked
+    // for "vodka" we must return vodka recipes, not gin ones.
+    const queriedSpirits = queriedIds.filter(
+      (id) => data.ingredientById.get(id)?.category === 'spirit',
+    );
+    const hardFilter = queriedSpirits.length ? queriedSpirits
+      : queriedIds.length ? queriedIds
+      : undefined;
+
+    // Three-level fallback so we always surface something useful.
+    let hits = search_recipes(
+      { has_ingredients: hardFilter, family: wantedFamily,
+        flavor_tags: wantedTags.size ? Array.from(wantedTags) : undefined, max_results: 20 },
       data,
     );
-
-    // If tag filter was too strict (no hits), fall back to ignoring tags
-    let effectiveHits = hits;
+    let tagFallback = false;
     if (hits.length === 0 && wantedTags.size > 0) {
-      effectiveHits = search_recipes(
-        {
-          has_ingredients: hasIngredients.length ? hasIngredients : undefined,
-          family: wantedFamily,
-          max_results: 20,
-        },
-        data,
-      );
+      tagFallback = true;
+      hits = search_recipes(
+        { has_ingredients: hardFilter, family: wantedFamily, max_results: 20 }, data);
+    }
+    if (hits.length === 0 && queriedSpirits.length > 0) {
+      // Spirit filter yielded nothing — open it up entirely.
+      hits = search_recipes({ family: wantedFamily, max_results: 20 }, data);
     }
 
-    // Rank by: makeability (exact > near > almost > cannot) and tag overlap
     const deterministicMatches = matchRecipesMemo(pantryIds, data);
     const matchByRecipe = new Map(deterministicMatches.map((m) => [m.recipe.id, m]));
 
-    const intentMatches: IntentMatch[] = effectiveHits.slice(0, 15).map((hit) => {
+    const intentMatches: IntentMatch[] = hits.slice(0, 15).map((hit) => {
       const det = matchByRecipe.get(hit.recipe_id);
       const tags = (RECIPE_TAGS[hit.recipe_id] ?? []) as FlavorTag[];
 
@@ -202,44 +238,44 @@ export class HeuristicProvider implements LlmProvider {
         subs = det.substitutions.map((s) => ({ original: s.originalId, use: s.useId }));
         missing = det.missing;
       } else {
-        // Recipe didn't show up in any matcher tier → user is missing more than one ingredient.
-        // Compute missing via check_pantry for display.
-        const recipe = data.recipes.find((r) => r.id === hit.recipe_id)!;
+        const recipe = data.recipeById.get(hit.recipe_id)!;
         const needed = recipe.ingredients.filter((ri) => !ri.optional).map((ri) => ri.ingredientId);
         const { missing: miss } = check_pantry(needed, pantryIds, data);
         missing = miss;
       }
 
       const recipeFull = get_recipe(hit.recipe_id, data)!;
-      const fitReason = buildFitReason(hit.name, tags, wantedTags, hasIngredients, recipeFull.ingredients.map((i) => i.ingredient_id), wantedFamily, hit.family);
+      const fitReason = buildFitReason(
+        hit.name, tags, wantedTags, queriedIds,
+        recipeFull.ingredients.map((i) => i.ingredient_id), wantedFamily, hit.family,
+      );
 
-      return {
-        recipeId: hit.recipe_id,
-        recipeName: hit.name,
-        fitReason,
-        makeability,
-        substitutions: subs,
-        missing,
-        tags,
-      };
+      return { recipeId: hit.recipe_id, recipeName: hit.name, fitReason,
+               makeability, substitutions: subs, missing, tags };
     });
 
-    // Sort: makeability preference, then originalquery intent score (tag overlap implicit via search_recipes ranking)
+    // Primary sort: how many explicitly-queried ingredients does the recipe contain?
+    // Ties broken by makeability tier (exact > near > almost > cannot).
+    // This ensures "vodka basil smash" beats "gin basil fizz" even when the user
+    // can make the gin one right now.
     const makeabilityRank = { now: 0, with_substitute: 1, missing_one: 2, cannot_make: 3 };
-    intentMatches.sort((a, b) => makeabilityRank[a.makeability] - makeabilityRank[b.makeability]);
+    intentMatches.sort((a, b) => {
+      if (queriedSet.size > 0) {
+        const aQ = countQueriedMatches(a.recipeId, queriedSet, data);
+        const bQ = countQueriedMatches(b.recipeId, queriedSet, data);
+        if (bQ !== aQ) return bQ - aQ;
+      }
+      return makeabilityRank[a.makeability] - makeabilityRank[b.makeability];
+    });
 
-    const interpretation = buildInterpretation(query, wantedTags, wantedFamily, parsed.resolved.map((r) => r.ingredientName));
+    const queriedNames = queriedIds.map((id) => data.ingredientById.get(id)?.name ?? id);
+    const interpretation = buildInterpretation(query, wantedTags, wantedFamily, queriedNames);
     const topMatches = intentMatches.slice(0, 5);
-    const notes =
-      hits.length === 0 && wantedTags.size > 0
-        ? 'Couldn\'t find a recipe matching those exact flavors — here are close alternatives.'
-        : undefined;
+    const notes = tagFallback
+      ? 'Couldn\'t find a recipe matching those exact flavors — here are close alternatives.'
+      : undefined;
 
-    return {
-      interpretation,
-      matches: topMatches,
-      notes,
-    };
+    return { interpretation, matches: topMatches, notes };
   }
 
   async inventFromPantry(
@@ -300,4 +336,23 @@ function buildInterpretation(
   if (ingredientNames.length) bits.push(`with ${ingredientNames.join(', ')}`);
   if (bits.length === 0) return `Looking for cocktails matching: "${query.trim()}"`;
   return `You want something ${bits.join(', ')}.`;
+}
+
+/**
+ * Count how many of the explicitly-queried ingredients appear in a recipe,
+ * using hierarchy-aware coverage (queried "vodka" matches recipe "citrus vodka"
+ * and vice-versa). Used to rank results by how well they match the query.
+ */
+function countQueriedMatches(
+  recipeId: string,
+  queriedSet: Set<string>,
+  data: DataIndex,
+): number {
+  const recipe = data.recipeById.get(recipeId);
+  if (!recipe || queriedSet.size === 0) return 0;
+  let count = 0;
+  for (const ri of recipe.ingredients) {
+    if (pantryCovers(ri.ingredientId, queriedSet, data)) count++;
+  }
+  return count;
 }

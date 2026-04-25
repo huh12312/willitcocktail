@@ -3,6 +3,7 @@ import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
 import { useCustomRecipes } from '../store/custom-recipes';
 import { getLlmProvider, HeuristicProvider } from '../llm';
+import { extractQueryIngredients } from '../llm/heuristic';
 
 import type { IntentSearchResult, InventedRecipe, LlmRecipeDetails } from '../llm';
 import type { Recipe } from '../types';
@@ -66,15 +67,17 @@ export function AskPanel({ onSelect }: AskPanelProps) {
     setOpenSearch(false);
     setOpenInvent(false);
 
-    // Parse any ingredients mentioned in the query for pantry expansion suggestion.
-    const parsed = await heuristic.parseIngredients(trimmed, data);
+    // Scan the full query for all ingredient mentions (word-boundary, multi-extract).
+    // This correctly handles "basil forward vodka drink" → [basil, vodka], unlike
+    // parseIngredients which splits on delimiters and returns only the first hit.
     const pantrySet = new Set(pantryIds);
-    const newMentions = parsed.resolved
-      .filter((r) => !pantrySet.has(r.ingredientId))
-      .map((r) => ({ id: r.ingredientId, name: r.ingredientName }));
+    const mentionedIds = extractQueryIngredients(trimmed, data);
+    const newMentions = mentionedIds
+      .filter((id) => !pantrySet.has(id))
+      .map((id) => ({ id, name: data.ingredientById.get(id)?.name ?? id }));
     setMentioned(newMentions);
 
-    const expandedPantry = [...new Set([...pantryIds, ...newMentions.map((m) => m.id)])];
+    const expandedPantry = [...new Set([...pantryIds, ...mentionedIds])];
 
     // "From our recipes" always uses the heuristic — fast, offline, deterministic.
     heuristic.searchIntent(trimmed, expandedPantry, data)
