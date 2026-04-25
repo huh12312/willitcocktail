@@ -90,12 +90,9 @@ export function compareVersions(a: string, b: string): number {
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  // Copy into a fresh ArrayBuffer so SubtleCrypto's type (BufferSource) is
-  // satisfied without a cast — Uint8Array's backing buffer is typed as
-  // ArrayBufferLike, which includes SharedArrayBuffer.
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  const buf = await crypto.subtle.digest('SHA-256', copy.buffer as ArrayBuffer);
+  // bytes.buffer is always a plain ArrayBuffer here — fetchBytes() wraps
+  // res.arrayBuffer() which never returns a SharedArrayBuffer.
+  const buf = await crypto.subtle.digest('SHA-256', bytes.buffer as ArrayBuffer);
   const arr = new Uint8Array(buf);
   let out = '';
   for (const b of arr) out += b.toString(16).padStart(2, '0');
