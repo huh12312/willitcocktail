@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useData } from '../data/source';
 import { usePantry } from '../store/pantry';
-import type { DataIndex } from '../data';
+import { pantryCovers } from '../data/pantry-covers';
 import { describeRecipe } from '../data/recipe_descriptions';
 
 interface RecipeModalProps {
@@ -13,7 +13,7 @@ export function RecipeModal({ recipeId, onClose }: RecipeModalProps) {
   const data = useData();
   const pantryIds = usePantry((s) => s.ingredients);
   const minStrength = usePantry((s) => s.minStrength);
-  const pantrySet = new Set(pantryIds);
+  const pantrySet = useMemo(() => new Set(pantryIds), [pantryIds]);
 
   useEffect(() => {
     if (!recipeId) return;
@@ -28,21 +28,12 @@ export function RecipeModal({ recipeId, onClose }: RecipeModalProps) {
   const recipe = data.recipes.find((r) => r.id === recipeId);
   if (!recipe) return null;
 
-  function hasInPantry(id: string): boolean {
-    if (pantrySet.has(id)) return true;
-    const descs = data.descendants.get(id);
-    if (descs) for (const d of descs) if (pantrySet.has(d)) return true;
-    const ancs = data.ancestors.get(id);
-    if (ancs) for (const a of ancs) if (pantrySet.has(a)) return true;
-    return false;
-  }
-
   function bestSubstitute(id: string): { useId: string; strength: number; notes: string | null } | null {
     const subs = data.substitutesOf.get(id) ?? [];
     let best: { useId: string; strength: number; notes: string | null } | null = null;
     for (const s of subs) {
       if (s.strength < minStrength) continue;
-      if (!coveredByPantry(s.substituteId, pantrySet, data)) continue;
+      if (!pantryCovers(s.substituteId, pantrySet, data)) continue;
       if (!best || s.strength > best.strength) {
         best = { useId: s.substituteId, strength: s.strength, notes: s.notes ?? null };
       }
@@ -87,7 +78,7 @@ export function RecipeModal({ recipeId, onClose }: RecipeModalProps) {
           <ul className="mb-6 divide-y divide-amber-800/40">
             {recipe.ingredients.map((ri) => {
               const ing = data.ingredientById.get(ri.ingredientId);
-              const have = hasInPantry(ri.ingredientId);
+              const have = pantryCovers(ri.ingredientId, pantrySet, data);
               const sub = !have && !ri.optional ? bestSubstitute(ri.ingredientId) : null;
               const subName = sub ? data.ingredientById.get(sub.useId)?.name ?? sub.useId : null;
               return (
@@ -152,13 +143,4 @@ export function RecipeModal({ recipeId, onClose }: RecipeModalProps) {
       </div>
     </div>
   );
-}
-
-function coveredByPantry(id: string, pantry: Set<string>, data: DataIndex): boolean {
-  if (pantry.has(id)) return true;
-  const descs = data.descendants.get(id);
-  if (descs) for (const d of descs) if (pantry.has(d)) return true;
-  const ancs = data.ancestors.get(id);
-  if (ancs) for (const a of ancs) if (pantry.has(a)) return true;
-  return false;
 }

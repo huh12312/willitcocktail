@@ -18,7 +18,10 @@ export interface DataIndex {
   ancestors: Map<string, Set<string>>;
 }
 
-function buildHierarchy(ingredients: Ingredient[]): {
+function buildHierarchy(
+  ingredients: Ingredient[],
+  ingredientById: Map<string, Ingredient>,
+): {
   descendants: Map<string, Set<string>>;
   ancestors: Map<string, Set<string>>;
 } {
@@ -45,13 +48,14 @@ function buildHierarchy(ingredients: Ingredient[]): {
   }
   for (const i of ingredients) collectDescendants(i.id);
 
+  // Use the O(1) map lookup instead of ingredients.find() to avoid O(n²) total.
   const ancestors = new Map<string, Set<string>>();
   for (const i of ingredients) {
     const set = new Set<string>([i.id]);
     let cursor: Ingredient | undefined = i;
     while (cursor?.parentId) {
       set.add(cursor.parentId);
-      cursor = ingredients.find((x) => x.id === cursor!.parentId);
+      cursor = ingredientById.get(cursor.parentId);
     }
     ancestors.set(i.id, set);
   }
@@ -73,7 +77,7 @@ export function buildDataIndex(
     arr.push(s);
     substitutesOf.set(s.ingredientId, arr);
   }
-  const { descendants, ancestors } = buildHierarchy(ingredients);
+  const { descendants, ancestors } = buildHierarchy(ingredients, ingredientById);
 
   return {
     ingredients,

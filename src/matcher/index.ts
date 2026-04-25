@@ -1,5 +1,6 @@
 import type { MatchResult, MatchSubstitution, Recipe } from '../types';
-import { DATA, type DataIndex } from '../data';
+import type { DataIndex } from '../data';
+import { pantryCovers } from '../data/pantry-covers';
 
 export interface MatchOptions {
   strict?: boolean; // only exact matches
@@ -33,32 +34,6 @@ const CLASSIC_SOURCES: ReadonlySet<Recipe['source']> = new Set([
 
 function isClassic(recipe: Recipe): boolean {
   return recipe.ibaOfficial === true || CLASSIC_SOURCES.has(recipe.source);
-}
-
-/**
- * A pantry ingredient satisfies a recipe ingredient if:
- *   - it IS the recipe ingredient, OR
- *   - it is a descendant of the recipe ingredient (child satisfies parent), OR
- *   - it is an ancestor of the recipe ingredient (a generic pantry entry satisfies a more-specific callout — e.g. "gin" in pantry covers "London Dry Gin" recipe call).
- *
- * The first two cases are the canonical shape; the third covers users who
- * enter their pantry at low specificity.
- */
-function pantryCovers(
-  recipeIngredientId: string,
-  pantry: Set<string>,
-  data: DataIndex,
-): boolean {
-  if (pantry.has(recipeIngredientId)) return true;
-  const descs = data.descendants.get(recipeIngredientId);
-  if (descs) {
-    for (const d of descs) if (pantry.has(d)) return true;
-  }
-  const ancs = data.ancestors.get(recipeIngredientId);
-  if (ancs) {
-    for (const a of ancs) if (pantry.has(a)) return true;
-  }
-  return false;
 }
 
 /**
@@ -138,7 +113,7 @@ function recipeRank(recipe: Recipe): number {
 export function matchRecipes(
   pantryIds: Iterable<string>,
   options: MatchOptions = {},
-  data: DataIndex = DATA,
+  data: DataIndex,
 ): MatchResult[] {
   const pantry = new Set(pantryIds);
   const minStrength = options.minSubstituteStrength ?? DEFAULT_MIN_STRENGTH;

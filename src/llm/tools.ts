@@ -1,4 +1,5 @@
 import type { DataIndex } from '../data';
+import { pantryCovers } from '../data/pantry-covers';
 import { RECIPE_TAGS, type FlavorTag } from '../data/flavor-tags';
 import type { CocktailFamily, Recipe, Substitute } from '../types';
 
@@ -192,16 +193,7 @@ export function check_pantry(
   const have: string[] = [];
   const missing: string[] = [];
   for (const id of ingredient_ids) {
-    if (pantry.has(id)) {
-      have.push(id);
-      continue;
-    }
-    const descs = data.descendants.get(id);
-    const ancs = data.ancestors.get(id);
-    let covered = false;
-    if (descs) for (const d of descs) if (pantry.has(d)) { covered = true; break; }
-    if (!covered && ancs) for (const a of ancs) if (pantry.has(a)) { covered = true; break; }
-    if (covered) have.push(id);
+    if (pantryCovers(id, pantry, data)) have.push(id);
     else missing.push(id);
   }
   return { have, missing };
