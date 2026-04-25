@@ -227,7 +227,7 @@ export function generateCandidates(opts: GenerateOptions): GeneratedCandidate[] 
     if (!allowed.has(grammar.family)) continue;
     let attempts = 0;
     let accepted = 0;
-    // Try up to perFamily * 3 attempts to hit perFamily accepted unique candidates.
+    // Try up to perFamily * 4 attempts to hit perFamily accepted unique candidates.
     while (accepted < perFamily && attempts < perFamily * 4) {
       attempts++;
       const cand = attemptCandidate(grammar, pantryIds, data, rand);
