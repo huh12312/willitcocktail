@@ -45,6 +45,11 @@ export function AskPanel({ onSelect }: AskPanelProps) {
   const heuristic = useMemo(() => new HeuristicProvider(), []);
   const savedIds = useMemo(() => new Set(savedRecipes.map((r) => r.id)), [savedRecipes]);
 
+  // Stable ID derived from the invention name — must match the id assigned in saveInvented().
+  function inventedRecipeId(inv: InventedRecipe): string {
+    return `gen_${inv.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+  }
+
   async function run(q: string) {
     const trimmed = q.trim();
     if (!trimmed) return;
@@ -73,17 +78,29 @@ export function AskPanel({ onSelect }: AskPanelProps) {
 
     // "From our recipes" always uses the heuristic — fast, offline, deterministic.
     heuristic.searchIntent(trimmed, expandedPantry, data)
-      .then((res) => { if (!ctrl.signal.aborted) setSearchResult(res); })
+      .then((res) => {
+        if (!ctrl.signal.aborted) {
+          setSearchResult(res);
+          setOpenSearch(true);
+        }
+      })
       .catch((err) => { if (!ctrl.signal.aborted) setSearchError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setSearchLoading(false); });
 
     // "Created for you" uses the full LLM provider.
+    // Pass expandedPantry so ingredients mentioned in the query inform invention
+    // the same way they inform the search results.
     getLlmProvider({ signal: ctrl.signal }).then((provider) =>
       (provider.inventFromPantry
-        ? provider.inventFromPantry(trimmed, pantryIds, data)
+        ? provider.inventFromPantry(trimmed, expandedPantry, data)
         : Promise.resolve([])
       )
-        .then((res) => { if (!ctrl.signal.aborted) setInvented(res); })
+        .then((res) => {
+          if (!ctrl.signal.aborted) {
+            setInvented(res);
+            if (res.length > 0) setOpenInvent(true);
+          }
+        })
         .catch(() => { /* silent — search results stand alone */ })
         .finally(() => { if (abortRef.current === ctrl || ctrl.signal.aborted) setInventLoading(false); })
     );
@@ -96,19 +113,18 @@ export function AskPanel({ onSelect }: AskPanelProps) {
   }
 
   function saveInvented(inv: InventedRecipe) {
-    const id = `gen_${Date.now()}`;
     const alsoNote = inv.alsoNeeded.length > 0
       ? `\n\nAlso works well with: ${inv.alsoNeeded.join(', ')}.`
       : '';
     const recipe: Recipe = {
-      id,
+      id: inventedRecipeId(inv),
       name: inv.name,
       family: inv.family,
       method: inv.method,
       glass: inv.glass,
       garnish: inv.garnish,
       instructions: inv.instructions + alsoNote,
-      source: 'generated',
+      source: 'user',
       ingredients: inv.ingredients,
     };
     saveCustom(recipe);
@@ -216,7 +232,7 @@ export function AskPanel({ onSelect }: AskPanelProps) {
                 key={i}
                 inv={inv}
                 data={data}
-                saved={savedIds.has(`gen_${inv.name}`)}
+                saved={savedIds.has(inventedRecipeId(inv))}
                 onSave={() => saveInvented(inv)}
                 onOpen={() => setSelectedInvented(inv)}
               />
@@ -267,7 +283,7 @@ export function AskPanel({ onSelect }: AskPanelProps) {
         <InventedRecipeModal
           inv={selectedInvented}
           data={data}
-          saved={savedIds.has(`gen_${selectedInvented.name}`)}
+          saved={savedIds.has(inventedRecipeId(selectedInvented))}
           onSave={() => saveInvented(selectedInvented)}
           onClose={() => setSelectedInvented(null)}
         />
