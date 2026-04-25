@@ -206,34 +206,3 @@ export function check_pantry(
   }
   return { have, missing };
 }
-
-// --- Tool schemas for function-calling (exposed to the model) ---
-
-export const TOOL_SCHEMAS = [
-  {
-    name: 'search_recipes',
-    description:
-      'Search the recipe database by ingredients and/or flavor characteristics.',
-    parameters: {
-      has_ingredients: { type: 'array', items: { type: 'string' } },
-      family: { type: 'string', enum: ['sour', 'highball', 'old_fashioned', 'spritz', 'martini', 'flip', 'fizz', 'julep'] },
-      flavor_tags: { type: 'array', items: { type: 'string', enum: [...['refreshing', 'herbaceous', 'citrus', 'smoky', 'bitter', 'sweet', 'spirit_forward', 'creamy', 'tropical', 'spicy']] } },
-      max_results: { type: 'number', default: 10 },
-    },
-  },
-  {
-    name: 'get_recipe',
-    description: 'Fetch a single recipe by ID. Always use this before citing a recipe\'s ingredients.',
-    parameters: { recipe_id: { type: 'string' } },
-  },
-  {
-    name: 'get_substitutes',
-    description: 'Get possible substitutes for an ingredient, ranked by closeness.',
-    parameters: { ingredient_id: { type: 'string' } },
-  },
-  {
-    name: 'check_pantry',
-    description: 'Check which of a list of ingredients are currently in the user\'s pantry.',
-    parameters: { ingredient_ids: { type: 'array', items: { type: 'string' } } },
-  },
-] as const;
