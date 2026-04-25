@@ -38,6 +38,20 @@ interface ChatToolCall {
   function: { name: string; arguments: string };
 }
 
+// Shape of a single SSE chunk from /chat/completions (stream: true).
+interface SSEChunk {
+  choices?: Array<{
+    delta?: {
+      content?: string;
+      tool_calls?: Array<{
+        index: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+  }>;
+}
+
 // --- Tool schema for the model (JSON Schema shape) ---
 
 const TOOL_FUNCTIONS = [
@@ -437,9 +451,9 @@ export class OpenAiCompatProvider implements LlmProvider {
         const payload = line.slice(5).trim();
         if (payload === '[DONE]') continue;
 
-        let chunk: any;
+        let chunk: SSEChunk;
         try {
-          chunk = JSON.parse(payload);
+          chunk = JSON.parse(payload) as SSEChunk;
         } catch {
           continue;
         }
@@ -516,11 +530,11 @@ function safeJsonParse(s: string): unknown {
 // --- System prompts ---
 
 function buildParseSystem(data: DataIndex): string {
-  const sample = data.ingredients.slice(0, 30).map((i) => `${i.id} (${i.name})`).join(', ');
+  const allIds = data.ingredients.map((i) => `${i.id} (${i.name})`).join(', ');
   return [
     'You help parse freeform ingredient lists into canonical ingredient IDs for a cocktail app.',
-    'Call search_recipes / get_recipe only if you need to check an ingredient ID exists.',
-    `Example canonical IDs: ${sample}, ... (see data for full list).`,
+    'Call search_recipes / get_recipe only if you need to verify an ID.',
+    `Full canonical ID list: ${allIds}.`,
     'When unsure which variant the user means (e.g. "gin" vs "london dry gin"), pick the most generic applicable ID.',
     'Confidence: 1.0 = certain; 0.7 = probable; 0.4 = guess. Put unparseable phrases in "unresolved".',
     'Always finish by calling finalize_pantry exactly once.',
