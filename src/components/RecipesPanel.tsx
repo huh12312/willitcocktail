@@ -51,7 +51,7 @@ export function RecipesPanel({ onSelect }: RecipesPanelProps) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search by name or ingredient…"
-        className="w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-amber-100 placeholder:text-amber-500/50 focus:outline-none focus:border-amber-500"
+        className="w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-amber-100 placeholder:text-amber-500/50 focus:outline-hidden focus:border-amber-500"
       />
 
       {/* Liquor filter chips */}

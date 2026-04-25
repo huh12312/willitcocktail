@@ -93,7 +93,7 @@ export function PantryQuickAdd() {
         onChange={(e) => setText(e.target.value)}
         placeholder="e.g. gin, sweet vermouth, some campari, lime juice"
         rows={2}
-        className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/50 focus:outline-none focus:border-amber-500"
+        className="mt-2 w-full rounded-md bg-amber-950/40 border border-amber-700/40 px-3 py-2 text-sm text-amber-100 placeholder:text-amber-500/50 focus:outline-hidden focus:border-amber-500"
       />
       <div className="mt-2 flex gap-2">
         <button
@@ -233,7 +233,7 @@ export function PantryQuickAdd() {
                   onChange={(e) =>
                     setPendingCustom({ ...pendingCustom, category: e.target.value as IngredientCategory })
                   }
-                  className="rounded-md bg-amber-950/40 border border-amber-700/40 px-2 py-1.5 text-sm text-amber-100 focus:outline-none focus:border-amber-500"
+                  className="rounded-md bg-amber-950/40 border border-amber-700/40 px-2 py-1.5 text-sm text-amber-100 focus:outline-hidden focus:border-amber-500"
                 >
                   {CATEGORY_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>

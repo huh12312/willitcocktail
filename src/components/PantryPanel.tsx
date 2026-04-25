@@ -157,7 +157,7 @@ export function PantryPanel() {
 
       <div className="flex items-center gap-2">
         <input
-          className="flex-1 rounded-md bg-amber-900/40 border border-amber-700/40 px-3 py-2 placeholder-amber-400/50 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          className="flex-1 rounded-md bg-amber-900/40 border border-amber-700/40 px-3 py-2 placeholder-amber-400/50 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
           placeholder="Search ingredients…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
