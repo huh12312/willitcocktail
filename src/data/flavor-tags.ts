@@ -80,7 +80,3 @@ export const RECIPE_TAGS: Record<string, FlavorTag[]> = {
   grasshopper: ['creamy', 'sweet', 'herbaceous'],
   alexander: ['creamy', 'sweet'],
 };
-
-export function tagsFor(recipeId: string): FlavorTag[] {
-  return RECIPE_TAGS[recipeId] ?? [];
-}

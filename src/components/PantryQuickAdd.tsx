@@ -37,8 +37,7 @@ export function PantryQuickAdd() {
     try {
       const res = await new HeuristicProvider().parseIngredients(text, data);
       setParsed(res);
-    } catch (err) {
-      console.error('parse failed', err);
+    } catch {
       setParsed({ resolved: [], unresolved: [text] });
     } finally {
       setLoading(false);

@@ -433,8 +433,6 @@ export function executeTool(
   }
 }
 
-export { sanitiseString, safeJsonParse } from './utils';
-
 // --- Shared provider methods ------------------------------------------------
 // proposeRecipe, getLlmRecipeDetails, and inventFromPantry are identical across
 // OpenAiCompatProvider and AnthropicProvider (only the HTTP transport differs).

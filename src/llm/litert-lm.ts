@@ -503,7 +503,7 @@ function sampleVocabulary(data: DataIndex, input: string): string {
   return out.join(', ');
 }
 
-export { safeJsonParse } from './utils';
+
 
 // JSON schemas. Stringified so the plugin can forward them to MediaPipe's
 // constrained-decoding API when available. When unsupported, the prompt itself

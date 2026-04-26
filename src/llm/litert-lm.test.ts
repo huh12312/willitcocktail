@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeJsonParse } from './litert-lm';
+import { safeJsonParse } from './utils';
 
 describe('safeJsonParse', () => {
   it('parses clean JSON', () => {
